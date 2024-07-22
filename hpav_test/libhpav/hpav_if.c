@@ -120,7 +120,7 @@ int hpav_populate_mac_addr(hpav_if_t **interfaces_list) {
         // Reset params
         memset(&ioctl_params, 0, sizeof(struct ifreq));
         // Use interface name
-        strcpy(ioctl_params.ifr_name, first_if->name);
+        strncpy(ioctl_params.ifr_name, first_if->name, sizeof(ioctl_params.ifr_name) - 1);
         // Get MAC address
         ioctl(temp_socket, SIOCGIFHWADDR, &ioctl_params);
 
