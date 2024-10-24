@@ -1,0 +1,237 @@
+Introduction
+
+  hpav_test is simple command-line utility to help user test MMEs, operate config file, operate nvram , and so on.
+  The list of supported MMEs is given at the end of this file.
+
+
+Build Prerequisites
+
+  On Linux (Ubuntu 14.04.6 LTS (GNU/Linux 4.15.0-142-generic x86_64)), following libs need to be installed
+      libpcap-dev
+      zlib1g-dev
+      libssl-dev
+
+Build on Linux
+  make
+
+Running on Linux
+  sudo hpav_test
+
+Usage
+
+  Network Interface Number
+
+    Most hpav_test commands require a network interface. Determine the
+    interface to use by:
+
+      hpav_test list_if
+
+    On Linxu the results will look something like:
+
+        Interface 0 : eth0 (MAC : 08:00:27:f4:35:e9)
+        Interface 1 : lo (MAC : 00:00:00:00:00:00)
+
+    Choose the number that corresponds to where the HomePlug AV STA is
+    connected. In this example, the number to use is 0.
+
+  Testing MMEs
+
+    hpav_test test_mme mme_name if_num [mac_address [parameters]]
+
+      mme_name    - The MME to be tested (e.g. cm_sta_cap_req)
+      if_num      - Network interface number (e.g. 1)
+      mac_address - MAC address of the STA to send the MME to. If not
+                    given, then the Ethernet broadcast address (ff:ff:ff:ff:ff:ff)
+                    is used.
+      parameters  - MME parameters to use.
+
+      Examples
+
+        hpav_test test_mme mtk_vs_get_version_req 1
+
+        hpav_test test_mme mtk_vs_eth_stats_req 1 00:0c:b9:0c:cd:55 0
+
+      Notes
+
+        If only the if_num is give then a help message listing the
+        mandatory parameters is give for the MME.
+
+  Opreating Configuration file
+
+    hpav_test conf_file read|write|parse|modify if_num [parameters]
+
+  Opreating nvram
+
+    hpav_test nvram read|write|parse|modify  if_num [parameters]
+
+  Rebooting device
+
+    hpav_test reboot if_num [mac]
+
+  Upgrading firmware
+
+    hpav_test fw_upgrade if_num mac bootloader firmware
+  
+  Finding station(s) by scaning each network interface
+    
+	hpav_test find_local_sta
+
+  Security Tests
+
+    hpav_test test_secu  gen_nmk|gen_dak|gen_nid|encrypt input [security_level]
+
+
+
+
+Supported MMEs
+
+  HPAV Standard MMEs
+  ------------------
+  cm_set_key_req
+  cm_amp_map_req
+
+
+  HPAV Standard MMEs Syntax
+  -------------------------
+  cm_set_key_req if_num sta_mac_address key_type my_nonce your_nonce pid prn pmn cco_cap nid new_eks new_key [device_password]
+    sta_mac_address : MAC address of the destination STA
+    key_type : key type (1 for NMK)
+    my_nonce : random number (unsigned 32-bit integer)
+    your_nonce : random number (unsigned 32-bit integer)
+    pid : protocol ID
+    prn : protocol run number
+    pmn : protocol message number
+    cco_cap : CCo capability
+    nid : NID of the network being queried
+    new_eks : new EKS or new payload EKS
+    new_key : new key (16 bytes written as 32 hexadecimal digits))
+    device_password : if present DAK encrypt the MME
+  cm_amp_map_req if_num sta_mac_address AMLEN AMDATA
+    sta_mac_address : MAC address of the destination STA
+    AMLEN : Number of amplitude map data entries
+    AMDATA : Amplitude Map Data (.txt file input)
+
+  Vertexcom MMEs
+  ------------
+  mtk_vs_get_version_req
+  mtk_vs_reset_req
+  mtk_vs_get_tonemask_req
+  mtk_vs_get_eth_phy_req
+  mtk_vs_eth_stats_req
+  mtk_vs_get_status_req
+  mtk_vs_get_tonemap_req
+  mtk_vs_get_snr_req
+  mtk_vs_get_link_stats_req
+  mtk_vs_get_nw_info_req
+  mtk_vs_set_capture_state_req
+  mtk_ms_set_nvram_req
+  mtk_vs_get_nvram_req
+  mtk_vs_get_pwm_stats_req,
+  mtk_vs_get_pwm_conf_req,
+  mtk_vs_set_pwm_conf_req,
+  mtk_vs_pwm_generation_req,
+  mtk_vs_spi_stats_req,
+  mtk_vs_set_tx_cali_req,
+  mtk_vs_file_access_req,
+  vc_vs_set_sniffer_conf_req,
+
+  Vertexcom MMEs Syntax
+  -------------------
+  mtk_vs_get_version_req if_num
+
+  mtk_vs_reset_req if_num
+
+  mtk_vs_get_tonemask_req if_num sta_mac_address
+    sta_mac_address : MAC address of the destination STA
+
+  mtk_vs_get_eth_phy_req if_num
+
+  mtk_vs_eth_stats_req if_num sta_mac_address command
+    sta_mac_address : MAC address of the destination STA
+    command : 0 to get stats, 1 to reset
+
+  mtk_vs_get_status_req if_num
+
+  mtk_vs_get_tonemap_req if_num sta_mac_address remote_sta_mac_address tmi int_id direction carrier_group
+    sta_mac_address : MAC address of the destination STA
+    remote_sta_mac_address : MAC address of remote peer station where is applied the requested tonemap
+    tmi : tonemap index of wanted tonemap
+    int_id : current tonemap interval list identifier
+    direction : 0 -> TX, 1 -> RX
+	carrier_group : 0/1: carrier group, 255:enable RLE
+
+  mtk_vs_get_snr_req if_num sta_mac_address remote_sta_mac_address int_index carrier_group
+    sta_mac_address : MAC address of the destination STA
+    remote_sta_mac_address : MAC address of remote peer station where is applied the requested snr
+    int_index : tonemap interval index
+    carrier_group : modulo-4 subcarrier group number
+
+  mtk_vs_get_link_stats_req if_num sta_mac_address req_type req_id lid tl_flag mgmt_flag des_src_mac_address
+    sta_mac_address : MAC address of the destination STA
+    req_type : request type
+    req_id : request identifier
+    lid : link identifier
+    tl_flag : transmit link flag
+    mgmt_flag : management link flag
+    des_src_mac_address : destination/source MAC address
+
+  mtk_vs_get_nw_info_req if_num
+
+  mtk_vs_set_capture_state_req if_num sta_mac_address remote_sta_mac_address state captured cap
+    sta_mac_address : MAC address of the destination STA
+    remote_sta_mac_address : MAC address of remote peer station
+    state : choose modem to start/stop capture data
+    captured : choose to capture what kinds of data type
+    captured_source : choose to capture what kinds of data source
+
+  mtk_vs_set_nvram_req if_num sta_mac_address block_index filename
+    sta_mac_address : MAC address of the destination STA
+    block_index : index of the NVRAM block to write
+    filename : binary file with data to write (gets the block at given index from it)
+
+  mtk_vs_get_nvram_req if_num sta_mac_address block_index
+    sta_mac_address : MAC address of the destination STA
+    block_index : 1024-byte nvram block to read
+
+  mtk_vs_get_pwm_stats_req if_num
+
+  mtk_vs_get_pwm_conf_req if_num
+
+  mtk_vs_set_pwm_conf_req if_num Peer_MAC OP_code PWM_mode PWM_measures PWM_measurement_period freq_thr dc_thr vol_thr
+    OP_code (Bit map):
+      0x01 = PWM mode
+      0x02 = PWM measures
+      0x04 = PWM measurement period
+      0x08 = Frequency change threshold
+      0x10 = Duty cycle change threshold
+      0x20 = Voltage change threshold
+    PWM_mode: 0 (Disable), 1 (Enable)
+    PWM_measures: 0 (Poll), 1 (Push)
+    PWM_measurement_period: 100 ~ 1000 (ms)
+    freq_thr: (Hz)
+    dc_thr: (1/1000)
+    vol_thr: (mV)
+    Ex: 00:11:22:33:44:55 56 0 0 100 20 400
+
+  mtk_vs_pwm_generation_req if_num sta_mac_address PWM_mode frequency duty_cycle
+    sta_mac_address : MAC address of the destination STA
+	PWM_mode: 0 (Disable), 1 (Enable)
+	frequency: (Hz)
+	duty_cycle: (%)
+  Ex: 00:11:22:33:44:55 1 10 50
+
+  mtk_vs_spi_stats_req if_num sta_mac_address command
+    sta_mac_address : MAC address of the destination STA
+    command : 0 to get stats, 1 to reset stats
+
+  mtk_vs_set_tx_cali_req if_num sta_mac_address enable
+    sta_mac_address : MAC address of the destination STA
+    enable : 0x00/Ox01 = Disable/Enable transmission PSD calibration featur
+
+  mtk_vs_file_access_req  if_num [mac_address] [bootloader input BOOTLOADER] [simage SIMAGE input SIMAGE] [simage-delete SIMAGE_DELETE]
+                                 [write WRITE input WRITE] [read READ] [debug] [save READ output OUTPUT] [delete DELETE]
+                                 [listdir DIR] [format] [all] [scan-sta]
+
+  vc_vs_set_sniffer_conf_req if_num sta_mac_address mode
+    sta_mac_address : MAC address of the destination STA
+    mode:  0 (MSDU Sniffer mode), 1 (MPDU Sniffer mode)
