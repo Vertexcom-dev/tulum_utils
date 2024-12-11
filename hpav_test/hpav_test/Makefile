@@ -60,6 +60,7 @@ depend:
 	$(CC) -MM $(CFLAGS) $(SRCS) > .depend
 
 install: $(BIN)
+	[ -d $(prefix)/sbin ] || install -m 0755 -o root -g root -d $(prefix)/sbin
 	install -m 0755 -o root -g root $(BIN) $(prefix)/sbin/
 	install -d $(sysconfdir)/bash_completion.d
 	install -m 644 -o root -g root bash_completion \

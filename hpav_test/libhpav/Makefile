@@ -35,3 +35,5 @@ endif
 
 depend:
 	$(CC) -MM $(CFLAGS) $(SRCS) > .depend
+
+install: ;
