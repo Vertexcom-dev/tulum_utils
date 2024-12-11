@@ -31,7 +31,7 @@ debug: CFLAGS += -g
 debug: all
 
 $(BIN): $(OBJS) $(LIB_COMM) $(LIB_MTK) $(LIB_JSON)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIB_COMM) $(LIB_MTK) $(LIB_JSON) -lpcap -lssl -lcrypto -lz -lrt
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIB_COMM) $(LIB_MTK) $(LIB_JSON) $(LDFLAGS) -lpcap -lssl -lcrypto -lz -lrt
 
 main.o: $(VERSION_H)
 
