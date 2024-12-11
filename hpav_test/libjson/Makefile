@@ -13,7 +13,7 @@ CFLAGS += -I$(INC_DIR) -fPIC
 all: $(LIB_JSON).so $(LIB_JSON).a
 
 debug: CFLAGS += -g
-debug: all 
+debug: all
 
 $(LIB_JSON).so: $(OBJS)
 	$(CC) -shared -fpic -o $@ $(OBJS)

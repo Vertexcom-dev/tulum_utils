@@ -12,7 +12,7 @@ LIB_MTK_PATH = $(BASE_DIR)/libhpav_mtk
 
 CFLAGS += -I$(INC_DIR) -I$(LIB_MTK_PATH) -fPIC
 
-all: $(LIB_COMM).so $(LIB_COMM).a 
+all: $(LIB_COMM).so $(LIB_COMM).a
 
 debug: CFLAGS += -g
 debug: all
