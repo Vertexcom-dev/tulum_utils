@@ -15,7 +15,7 @@ CFLAGS += -I$(INC_DIR) -I$(LIB_COMM_PATH) -fPIC
 all: $(LIB_MTK).so $(LIB_MTK).a
 
 debug: CFLAGS += -g
-debug: all 
+debug: all
 
 $(LIB_MTK).so: $(OBJS)
 	$(CC) -shared -fpic -o $@ $(OBJS)
@@ -35,3 +35,5 @@ endif
 
 depend:
 	$(CC) -MM $(CFLAGS) $(SRCS) > .depend
+
+install: ;

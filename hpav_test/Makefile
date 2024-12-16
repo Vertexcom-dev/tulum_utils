@@ -1,7 +1,7 @@
 
-CC  := gcc
-CPP := g++
-AR := ar
+CC  ?= gcc
+CPP ?= g++
+AR  ?= ar
 CFLAGS += -I.
 CPPFLAGS += -I.
 

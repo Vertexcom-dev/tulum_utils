@@ -20,6 +20,7 @@ CFLAGS += -I$(INC_DIR) \
 	-I$(LIB_COMM_PATH) -I$(LIB_MTK_PATH) -I$(LIB_JSON_PATH) \
 	-Wl,--start-group  -L$(LIB_COMM_PATH) -L$(LIB_MTK_PATH) -L$(LIB_JSON_PATH) -Wl,--end-group
 
+DESTDIR ?=
 prefix ?= /usr/local
 sysconfdir ?= $(prefix)/etc
 
@@ -31,7 +32,7 @@ debug: CFLAGS += -g
 debug: all
 
 $(BIN): $(OBJS) $(LIB_COMM) $(LIB_MTK) $(LIB_JSON)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIB_COMM) $(LIB_MTK) $(LIB_JSON) -lpcap -lssl -lcrypto -lz -lrt
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIB_COMM) $(LIB_MTK) $(LIB_JSON) $(LDFLAGS) -lpcap -lssl -lcrypto -lz -lrt
 
 main.o: $(VERSION_H)
 
@@ -60,9 +61,10 @@ depend:
 	$(CC) -MM $(CFLAGS) $(SRCS) > .depend
 
 install: $(BIN)
-	install -m 0755 -o root -g root $(BIN) $(prefix)/sbin/
-	install -d $(sysconfdir)/bash_completion.d
+	[ -d $(DESTDIR)$(prefix)/sbin ] || install -m 0755 -o root -g root -d $(DESTDIR)$(prefix)/sbin
+	install -m 0755 -o root -g root $(BIN) $(DESTDIR)$(prefix)/sbin/
+	install -d $(DESTDIR)$(sysconfdir)/bash_completion.d
 	install -m 644 -o root -g root bash_completion \
-	        $(sysconfdir)/bash_completion.d/hpav_test
+	        $(DESTDIR)$(sysconfdir)/bash_completion.d/hpav_test
 
 .PHONY: install

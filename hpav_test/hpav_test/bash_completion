@@ -1,0 +1,42 @@
+# bash completion for hpav_test
+
+_hpav_test() {
+    local cur prev
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    case ${COMP_CWORD} in
+        1)
+            COMPREPLY=( $(compgen -W "fw_upgrade find_local_sta reboot nvram conf_file test_secu test_mme open_if list_if" -- ${cur}) )
+            ;;
+        2)
+            case "${prev}" in
+                fw_upgrade)
+                    ;;
+                find_local_sta)
+                    ;;
+                reboot)
+                    ;;
+                nvram)
+                    COMPREPLY=( $(compgen -W "read write parse modify" -- ${cur}) )
+                    ;;
+                conf_file)
+                    COMPREPLY=( $(compgen -W "read write parse modify" -- ${cur}) )
+                    ;;
+                test_secu)
+                    COMPREPLY=( $(compgen -W "gen_nmk gen_dak gen_nid encrypt" -- ${cur}) )
+                    ;;
+                test_mme)
+                    COMPREPLY=( $(compgen -W "cm_set_key_req cm_amp_map_req mtk_vs_get_version_req mtk_vs_reset_req mtk_vs_get_tonemask_req mtk_vs_get_eth_phy_req mtk_vs_eth_stats_req mtk_vs_get_status_req mtk_vs_get_tonemap_req mtk_vs_get_snr_req mtk_vs_get_link_stats_req mtk_vs_get_nw_info_req mtk_vs_set_capture_state_req mtk_vs_set_nvram_req mtk_vs_get_nvram_req mtk_vs_get_pwm_stats_req mtk_vs_get_pwm_conf_req mtk_vs_set_pwm_conf_req mtk_vs_pwm_generation_req mtk_vs_spi_stats_req mtk_vs_set_tx_cali_req mtk_vs_file_access_req vc_vs_set_sniffer_conf_req vc_vs_set_remote_access_req vc_vs_get_remote_access_req" -- ${cur}) )
+                    ;;
+                open_if)
+                    ;;
+                list_if)
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+complete -F _hpav_test hpav_test
