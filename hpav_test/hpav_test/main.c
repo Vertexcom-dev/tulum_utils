@@ -394,13 +394,6 @@ int test_find_local_sta(int argc, char *argv[]) {
             // Sending MME on the channel
             printf("Interface successfully opened\n");
             printf("Sending Mstar VS_GET_NW_INFO.REQ on the channel\n");
-            if (argc > 0) {
-                if (!hpav_stomac(argv[0], dest_mac)) {
-                    printf("An error occured. Input mac value is in valid format...\n");
-                    return -1;
-                }
-            }
-
             memset(&mme_sent, 0x0,
                    sizeof(struct hpav_mtk_vs_get_nw_info_req));
             result = hpav_mtk_vs_get_nw_info_sndrcv(current_chan, dest_mac,
