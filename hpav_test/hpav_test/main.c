@@ -348,11 +348,12 @@ int test_reboot(int argc, char *argv[]) {
 }
 
 int test_find_local_sta(int argc, char *argv[]) {
-    if (argc == 0) {
+    if (0 <= argc && argc <= 1) {
         struct hpav_if *interfaces = NULL;
         struct hpav_error *error_stack = NULL;
         struct hpav_chan *current_chan = NULL;
         struct hpav_if *interface_to_open = NULL;
+        int interface_num_to_open = 0;
         struct hpav_mtk_vs_get_nw_info_req mme_sent;
         struct hpav_mtk_vs_get_nw_info_cnf *response;
         unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {0xff, 0xff, 0xff,
@@ -372,8 +373,25 @@ int test_find_local_sta(int argc, char *argv[]) {
             printf("No interface available\n");
             return -1;
         }
+
+        // Get overall count of available interfaces
         unsigned int if_number = hpav_get_number_of_interfaces(interfaces);
-        for (i = 0; i < if_number; i++) {
+
+        // In case optional parameter if_num is given, just operate on that
+        if (argc == 1) {
+            // Get interface number
+            interface_num_to_open = atoi(argv[0]);
+            // Check that interface number does not exceed available interface numbers
+            if (interface_num_to_open < 0 || interface_num_to_open >= if_number) {
+                printf("Interface number %d not found (0-%d available)\n",
+                       interface_num_to_open, if_number - 1);
+                return -1;
+            }
+            // Adjust limit for loop
+            if_number = interface_num_to_open + 1;
+        }
+
+        for (i = interface_num_to_open; i < if_number; i++) {
             // Get interface
             interface_to_open = hpav_get_interface_by_index(interfaces, i);
 
@@ -431,7 +449,7 @@ int test_find_local_sta(int argc, char *argv[]) {
 
         return 0;
     }
-    printf("Usage: hpav_test find_local_sta\n");
+    printf("Usage: hpav_test find_local_sta [if_num]\n");
     return 0;
 }
 
