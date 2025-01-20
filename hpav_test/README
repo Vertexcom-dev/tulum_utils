@@ -56,11 +56,11 @@ Usage
         If only the if_num is give then a help message listing the
         mandatory parameters is give for the MME.
 
-  Opreating Configuration file
+  Operating Configuration file
 
     hpav_test conf_file read|write|parse|modify if_num [parameters]
 
-  Opreating nvram
+  Operating nvram
 
     hpav_test nvram read|write|parse|modify  if_num [parameters]
 
@@ -71,10 +71,10 @@ Usage
   Upgrading firmware
 
     hpav_test fw_upgrade if_num mac bootloader firmware
-  
-  Finding station(s) by scaning each network interface
-    
-	hpav_test find_local_sta
+
+  Finding station(s) by scaning each network interface or a specific one
+
+    hpav_test find_local_sta [if_num]
 
   Security Tests
 
@@ -158,7 +158,7 @@ Supported MMEs
     tmi : tonemap index of wanted tonemap
     int_id : current tonemap interval list identifier
     direction : 0 -> TX, 1 -> RX
-	carrier_group : 0/1: carrier group, 255:enable RLE
+    carrier_group : 0/1: carrier group, 255:enable RLE
 
   mtk_vs_get_snr_req if_num sta_mac_address remote_sta_mac_address int_index carrier_group
     sta_mac_address : MAC address of the destination STA
@@ -215,10 +215,10 @@ Supported MMEs
 
   mtk_vs_pwm_generation_req if_num sta_mac_address PWM_mode frequency duty_cycle
     sta_mac_address : MAC address of the destination STA
-	PWM_mode: 0 (Disable), 1 (Enable)
-	frequency: (Hz)
-	duty_cycle: (%)
-  Ex: 00:11:22:33:44:55 1 10 50
+    PWM_mode: 0 (Disable), 1 (Enable)
+    frequency: (Hz)
+    duty_cycle: (%)
+    Ex: 00:11:22:33:44:55 1 10 50
 
   mtk_vs_spi_stats_req if_num sta_mac_address command
     sta_mac_address : MAC address of the destination STA
