@@ -26,17 +26,20 @@
 #include "hpav_mtk_api.h"
 #include "hpav_utils.h"
 #include "test_mtk.h"
+#include "exitcodes.h"
 #if defined(__linux__)
 #include <arpa/inet.h>
 #endif
+
 int test_nvram_read(int argc, char *argv[]) {
     if (argc < 3) {
         printf("Usage: $hpav_test nvram read if_num mac output_file\n");
-        return -1;
+        return EXIT_USAGE;
     }
     int interface_num_to_open = atoi(argv[0]);
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
 
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
@@ -80,6 +83,7 @@ int test_nvram_read(int argc, char *argv[]) {
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     int sta_num = 1, i, j;
                     if (response != NULL) {
@@ -124,8 +128,10 @@ int test_nvram_read(int argc, char *argv[]) {
                         fwrite(&response->data, 1, response->nvram_size, nvram);
                         fclose(nvram);
 
-                    } else
+                    } else {
                         printf("No response. Get nvram fails.\n");
+                        rv = EXIT_NO_RESPONSE;
+                    }
                 }
                 // Free response
                 hpav_free_mtk_vs_get_nvram_cnf(response);
@@ -135,25 +141,27 @@ int test_nvram_read(int argc, char *argv[]) {
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 int test_nvram_write(int argc, char *argv[]) {
     if (argc < 3) {
         printf("Usage: $hpav_test nvram write if_num mac input_file\n");
-        return -1;
+        return EXIT_USAGE;
     }
     int interface_num_to_open = atoi(argv[0]);
     struct hpav_if *interfaces = NULL;
@@ -162,6 +170,7 @@ int test_nvram_write(int argc, char *argv[]) {
     FILE *nvram = NULL;
     unsigned short nvram_size = MTK_NVRAM_BLOCK_SIZE;
     int block_index = atoi("0");
+    int rv = EXIT_SUCCESS;
 
     nvram = fopen(argv[2], "r");
     if (NULL == nvram) {
@@ -229,10 +238,12 @@ int test_nvram_write(int argc, char *argv[]) {
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
-                    if (response == NULL)
+                    if (response == NULL) {
                         printf("Failed to write nvram.\n");
-                    else {
+                        rv = EXIT_FAILURE;
+                    } else {
                         if (response->result == 0)
                             printf("Write nvram successfully.\n");
                     }
@@ -243,24 +254,26 @@ int test_nvram_write(int argc, char *argv[]) {
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 int test_nvram_parse(int argc, char *argv[]) {
     if (argc != 1) {
         printf("Usage: hpav_test nvram parse input_file\n");
-        return -1;
+        return EXIT_USAGE;
     }
 
     FILE *nvram = NULL;
@@ -295,7 +308,7 @@ int test_nvram_modify(int argc, char *argv[]) {
     if (argc < 3 || (argc & 1) == 0) {
         printf("Usage: $hpav_test nvram modify input_file mac "
                "xx:xx:xx:xx:xx:xx\n");
-        return -1;
+        return EXIT_USAGE;
     }
 
     FILE *nvram = NULL;
@@ -330,6 +343,7 @@ int test_nvram_modify(int argc, char *argv[]) {
     } else {
         printf("Usage: $hpav_test nvram modify input_file mac "
                "xx:xx:xx:xx:xx:xx\n");
+        return EXIT_USAGE;
     }
 
     nvram = fopen(argv[0], "w");
