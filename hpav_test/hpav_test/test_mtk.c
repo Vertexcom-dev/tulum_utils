@@ -30,6 +30,7 @@
 #include "util.h"
 #include "stdbool.h"
 #include "stdarg.h"
+#include "exitcodes.h"
 
 #ifdef WIN32
 #include "windows.h"
@@ -88,13 +89,15 @@ int test_mme_mtk_vs_set_nvram_req(int interface_num_to_open, int argc,
     unsigned short nvram_size = MTK_NVRAM_BLOCK_SIZE;
     long nvram_read_size = 0;
     unsigned int nvram_block_size_max = 0;
+    int rv = EXIT_SUCCESS;
+
     if (argc < 3) {
         printf("Mandatory parameters : sta_mac_address block_index filename\n");
         printf("sta_mac_address : MAC address of the destination STA\n");
         printf("block_index : index of the NVRAM block to write\n");
         printf("filename : binary file with data to write (gets the block at "
                "given index from it)\n");
-        return -1;
+        return EXIT_USAGE;
     }
     // Get parameters
     block_index = atoi(argv[1]);
@@ -178,7 +181,7 @@ int test_mme_mtk_vs_set_nvram_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -204,9 +207,12 @@ int test_mme_mtk_vs_set_nvram_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_set_nvram_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_set_nvram_cnf(response);
@@ -217,19 +223,21 @@ int test_mme_mtk_vs_set_nvram_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_version_cnf(struct hpav_mtk_vs_get_version_cnf *response) {
@@ -277,6 +285,8 @@ int test_mme_mtk_vs_get_version_req(int interface_num_to_open, int argc,
                                     char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
         printf("An error occured. Dumping error stack...\n");
@@ -311,7 +321,7 @@ int test_mme_mtk_vs_get_version_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -325,9 +335,12 @@ int test_mme_mtk_vs_get_version_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_version_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_version_cnf(response);
@@ -338,19 +351,21 @@ int test_mme_mtk_vs_get_version_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_reset_cnf(struct hpav_mtk_vs_reset_cnf *response) {
@@ -377,6 +392,8 @@ int test_mme_mtk_vs_reset_req(int interface_num_to_open, int argc,
                               char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
         printf("An error occured. Dumping error stack...\n");
@@ -411,7 +428,7 @@ int test_mme_mtk_vs_reset_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -425,9 +442,12 @@ int test_mme_mtk_vs_reset_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_reset_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_reset_cnf(response);
@@ -438,24 +458,28 @@ int test_mme_mtk_vs_reset_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 int test_mme_mtk_vs_reset_ind(int interface_num_to_open, int argc,
                               char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
         printf("An error occured. Dumping error stack...\n");
@@ -490,7 +514,7 @@ int test_mme_mtk_vs_reset_ind(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -505,6 +529,7 @@ int test_mme_mtk_vs_reset_ind(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 }
                 // Close channel
                 hpav_close_channel(current_chan);
@@ -513,19 +538,21 @@ int test_mme_mtk_vs_reset_ind(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_nvram_cnf(struct hpav_mtk_vs_get_nvram_cnf *response) {
@@ -570,12 +597,14 @@ int test_mme_mtk_vs_get_nvram_req(int interface_num_to_open, int argc,
                                   char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Parameters
     if (argc < 2) {
         printf("Mandatory parameters : sta_mac_address block_index\n");
         printf("sta_mac_address : MAC address of the destination STA\n");
         printf("block_index : 1024-byte nvram block to read\n");
-        return -1;
+        return EXIT_USAGE;
     }
 
     // Get list of interfaces from libhpav
@@ -612,7 +641,7 @@ int test_mme_mtk_vs_get_nvram_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -631,9 +660,12 @@ int test_mme_mtk_vs_get_nvram_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_nvram_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_nvram_cnf(response);
@@ -644,19 +676,21 @@ int test_mme_mtk_vs_get_nvram_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_tonemask_cnf(
@@ -688,6 +722,8 @@ int test_mme_mtk_vs_get_tonemask_req(int interface_num_to_open, int argc,
                                      char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
         printf("An error occured. Dumping error stack...\n");
@@ -699,7 +735,7 @@ int test_mme_mtk_vs_get_tonemask_req(int interface_num_to_open, int argc,
     if (argc < 1) {
         printf("Mandatory parameter : sta_mac_address \n");
         printf("sta_mac_address : MAC address of the destination STA\n");
-        return -1;
+        return EXIT_USAGE;
     }
     if (interfaces != NULL) {
         struct hpav_if *interface_to_open = NULL;
@@ -727,13 +763,13 @@ int test_mme_mtk_vs_get_tonemask_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
                 // Parameters
                 if (!hpav_stomac(argv[1], mme_sent.peer_mac_addr)) {
                     printf("An error occured. Input mac value is in valid format...\n");
-                    return -1;
+                    return EXIT_USAGE;
                 }
                 printf("Interface successfully opened\n");
                 // Sending MME on the channel
@@ -745,9 +781,12 @@ int test_mme_mtk_vs_get_tonemask_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_tonemask_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_tonemask_cnf(response);
@@ -758,19 +797,21 @@ int test_mme_mtk_vs_get_tonemask_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_eth_phy_cnf(struct hpav_mtk_vs_get_eth_phy_cnf *response) {
@@ -805,6 +846,8 @@ int test_mme_mtk_vs_get_eth_phy_req(int interface_num_to_open, int argc,
                                     char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
         printf("An error occured. Dumping error stack...\n");
@@ -839,7 +882,7 @@ int test_mme_mtk_vs_get_eth_phy_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -853,9 +896,12 @@ int test_mme_mtk_vs_get_eth_phy_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_eth_phy_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_eth_phy_cnf(response);
@@ -866,19 +912,21 @@ int test_mme_mtk_vs_get_eth_phy_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_eth_stats_cnf(struct hpav_mtk_vs_eth_stats_cnf *response) {
@@ -939,13 +987,15 @@ int test_mme_mtk_vs_eth_stats_req(int interface_num_to_open, int argc,
                                   char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     int command;
     // Parameters
     if (argc < 2) {
         printf("Mandatory parameters : sta_mac_address command\n");
         printf("sta_mac_address : MAC address of the destination STA\n");
         printf("command : 0 to get stats, 1 to reset\n");
-        return -1;
+        return EXIT_USAGE;
     }
     command = atoi(argv[1]);
 
@@ -983,7 +1033,7 @@ int test_mme_mtk_vs_eth_stats_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -999,9 +1049,12 @@ int test_mme_mtk_vs_eth_stats_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_eth_stats_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_eth_stats_cnf(response);
@@ -1012,19 +1065,21 @@ int test_mme_mtk_vs_eth_stats_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_status_cnf(struct hpav_mtk_vs_get_status_cnf *response) {
@@ -1077,6 +1132,7 @@ int test_mme_mtk_vs_get_status_req(int interface_num_to_open, int argc,
                                    char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
 
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
@@ -1112,7 +1168,7 @@ int test_mme_mtk_vs_get_status_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -1126,9 +1182,12 @@ int test_mme_mtk_vs_get_status_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_status_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_status_cnf(response);
@@ -1139,19 +1198,21 @@ int test_mme_mtk_vs_get_status_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_tonemap_cnf(struct hpav_mtk_vs_get_tonemap_cnf *response,
@@ -1257,6 +1318,8 @@ int test_mme_mtk_vs_get_tonemap_req(int interface_num_to_open, int argc,
     unsigned int int_id;
     unsigned int direction;
     unsigned int carrier_group;
+    int rv = EXIT_SUCCESS;
+
     // Parameters
     if (argc < 6) {
         printf("Mandatory parameters   : sta_mac_address "
@@ -1269,11 +1332,11 @@ int test_mme_mtk_vs_get_tonemap_req(int interface_num_to_open, int argc,
                "identifier\n");
         printf("direction              : 0 -> TX, 1 -> RX\n");
         printf("carrier_group          : 0/1: carrier group, 255:enable RLE\n");
-        return -1;
+        return EXIT_USAGE;
     }
     if (!hpav_stomac(argv[1], remote_sta_mac_addr)) {
         printf("An error occured. Input mac value is in valid format...\n");
-        return -1;
+        return EXIT_USAGE;
     }
     tmi = atoi(argv[2]);
     int_id = atoi(argv[3]);
@@ -1314,7 +1377,7 @@ int test_mme_mtk_vs_get_tonemap_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -1335,10 +1398,13 @@ int test_mme_mtk_vs_get_tonemap_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_tonemap_cnf(
                         response, (carrier_group == 0xff) ? 1 : 0);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_tonemap_cnf(response);
@@ -1349,19 +1415,21 @@ int test_mme_mtk_vs_get_tonemap_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_set_capture_state_cnf(
@@ -1393,6 +1461,8 @@ int test_mme_mtk_vs_set_capture_state_req(int interface_num_to_open, int argc,
     unsigned char state;
     unsigned char captured;
     unsigned char captured_source;
+    int rv = EXIT_SUCCESS;
+
     // Parameters
     if (argc < 5) {
         printf("Mandatory parameters : sta_mac_address remote_sta_mac_address "
@@ -1403,11 +1473,11 @@ int test_mme_mtk_vs_set_capture_state_req(int interface_num_to_open, int argc,
         printf("captured : choose to capture what kinds of data type\n");
         printf(
             "captured_source : choose to capture what kinds of data source\n");
-        return -1;
+        return EXIT_USAGE;
     }
     if (!hpav_stomac(argv[1], remote_sta_mac_addr)) {
         printf("An error occured. Input mac value is in valid format...\n");
-        return -1;
+        return EXIT_USAGE;
     }
     state = atoi(argv[2]);
     captured = atoi(argv[3]);
@@ -1447,7 +1517,7 @@ int test_mme_mtk_vs_set_capture_state_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -1468,9 +1538,12 @@ int test_mme_mtk_vs_set_capture_state_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_set_capture_state_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_set_capture_state_cnf(response);
@@ -1481,19 +1554,21 @@ int test_mme_mtk_vs_set_capture_state_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_snr_cnf(struct hpav_mtk_vs_get_snr_cnf *response) {
@@ -1556,6 +1631,8 @@ int test_mme_mtk_vs_get_snr_req(int interface_num_to_open, int argc,
     unsigned char remote_sta_mac_addr[ETH_MAC_ADDRESS_SIZE];
     unsigned int int_index;
     unsigned int carrier_group;
+    int rv = EXIT_SUCCESS;
+
     // Parameters
     if (argc < 4) {
         printf("Mandatory parameters : sta_mac_address remote_sta_mac_address "
@@ -1565,11 +1642,11 @@ int test_mme_mtk_vs_get_snr_req(int interface_num_to_open, int argc,
                "where is applied the requested snr\n");
         printf("int_index : tonemap interval index\n");
         printf("carrier_group : modulo-4 subcarrier group number\n");
-        return -1;
+        return EXIT_USAGE;
     }
     if (!hpav_stomac(argv[1], remote_sta_mac_addr)) {
         printf("An error occured. Input mac value is in valid format...\n");
-        return -1;
+        return EXIT_USAGE;
     }
     int_index = atoi(argv[2]);
     carrier_group = atoi(argv[3]);
@@ -1608,7 +1685,7 @@ int test_mme_mtk_vs_get_snr_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -1627,9 +1704,12 @@ int test_mme_mtk_vs_get_snr_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_snr_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_snr_cnf(response);
@@ -1640,19 +1720,21 @@ int test_mme_mtk_vs_get_snr_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_link_stats_cnf(
@@ -1739,6 +1821,8 @@ int test_mme_mtk_vs_get_link_stats_req(int interface_num_to_open, int argc,
     unsigned int tl_flag;
     unsigned int mgmt_flag;
     unsigned char des_src_mac_address[ETH_MAC_ADDRESS_SIZE];
+    int rv = EXIT_SUCCESS;
+
     // Parameters
     if (argc < 7) {
         printf("Mandatory parameters : sta_mac_address req_type req_id lid "
@@ -1750,7 +1834,7 @@ int test_mme_mtk_vs_get_link_stats_req(int interface_num_to_open, int argc,
         printf("tl_flag : transmit link flag\n");
         printf("mgmt_flag : management link flag\n");
         printf("des_src_mac_address : destination/source MAC address\n");
-        return -1;
+        return EXIT_USAGE;
     }
     req_type = atoi(argv[1]);
     req_id = atoi(argv[2]);
@@ -1759,7 +1843,7 @@ int test_mme_mtk_vs_get_link_stats_req(int interface_num_to_open, int argc,
     mgmt_flag = atoi(argv[5]);
     if (!hpav_stomac(argv[6], des_src_mac_address)) {
         printf("An error occured. Input mac value is in valid format...\n");
-        return -1;
+        return EXIT_USAGE;
     }
 
     // Get list of interfaces from libhpav
@@ -1796,7 +1880,7 @@ int test_mme_mtk_vs_get_link_stats_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -1818,9 +1902,12 @@ int test_mme_mtk_vs_get_link_stats_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_link_stats_cnf(response, req_type, tl_flag);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_link_stats_cnf(response);
@@ -1831,19 +1918,21 @@ int test_mme_mtk_vs_get_link_stats_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_nw_info_cnf(struct hpav_mtk_vs_get_nw_info_cnf *response) {
@@ -1907,6 +1996,7 @@ int test_mme_mtk_vs_get_nw_info_req(int interface_num_to_open, int argc,
     unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {0xff, 0xff, 0xff,
                                                     0xff, 0xff, 0xff};
     unsigned int num_interfaces = 0;
+    int rv = EXIT_SUCCESS;
     int result = -1;
 
     // Get list of interfaces from libhpav
@@ -1930,7 +2020,7 @@ int test_mme_mtk_vs_get_nw_info_req(int interface_num_to_open, int argc,
         printf("Interface number %d not found (0-%d available)\n",
                interface_num_to_open, (num_interfaces - 1));
         hpav_free_interfaces(interfaces);
-        return -1;
+        return EXIT_USAGE;
     }
 
     // Open the interface
@@ -1953,7 +2043,7 @@ int test_mme_mtk_vs_get_nw_info_req(int interface_num_to_open, int argc,
     if (argc > 0) {
         if (!hpav_stomac(argv[0], dest_mac)) {
             printf("An error occured. Input mac value is in valid format...\n");
-            return -1;
+            return EXIT_USAGE;
         }
     }
 
@@ -1964,9 +2054,12 @@ int test_mme_mtk_vs_get_nw_info_req(int interface_num_to_open, int argc,
         printf("An error occured. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
+        rv = EXIT_FAILURE;
     } else {
         // Dump response
         dump_mtk_vs_get_nw_info_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
 
     // Free response
@@ -1977,7 +2070,7 @@ int test_mme_mtk_vs_get_nw_info_req(int interface_num_to_open, int argc,
     // Free list of interfaces
     hpav_free_interfaces(interfaces);
 
-    return 0;
+    return rv;
 }
 
 #define ACTIONS_MAX_LENGTH 8
@@ -2037,6 +2130,8 @@ int test_mme_mtk_vs_get_pwm_stats_req(int interface_num_to_open, int argc,
                                       char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
         printf("An error occured. Dumping error stack...\n");
@@ -2071,7 +2166,7 @@ int test_mme_mtk_vs_get_pwm_stats_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -2085,9 +2180,12 @@ int test_mme_mtk_vs_get_pwm_stats_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_pwm_stats_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_pwm_stats_cnf(response);
@@ -2098,19 +2196,21 @@ int test_mme_mtk_vs_get_pwm_stats_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_get_pwm_conf_cnf(
@@ -2162,6 +2262,8 @@ int test_mme_mtk_vs_get_pwm_conf_req(int interface_num_to_open, int argc,
                                      char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
         printf("An error occured. Dumping error stack...\n");
@@ -2196,7 +2298,7 @@ int test_mme_mtk_vs_get_pwm_conf_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -2210,9 +2312,12 @@ int test_mme_mtk_vs_get_pwm_conf_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_get_pwm_conf_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_get_pwm_conf_cnf(response);
@@ -2223,19 +2328,21 @@ int test_mme_mtk_vs_get_pwm_conf_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_set_pwm_conf_cnf(
@@ -2273,6 +2380,7 @@ int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
     struct hpav_error *error_stack = NULL;
     int result = 0;
     struct hpav_mtk_vs_set_pwm_conf_req mme_sent;
+    int rv = EXIT_SUCCESS;
 
     if (argc != SET_PWM_CONF_PARAMETERS_NUM) {
         result = MTK_VS_SET_PWM_CONF_REQ_PARAMETER_FAIL;
@@ -2311,7 +2419,7 @@ int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
                "saradc_lsb: (mV/1000)\n"
                "voltage_bias: (mV)\n"
                "Ex: 00:11:22:33:44:55 127 0 0 100 5 30 500 12981 327\n");
-        return MTK_VS_SET_PWM_CONF_REQ_PARAMETER_FAIL;
+        return EXIT_USAGE;
     }
 
     // Get list of interfaces from libhpav
@@ -2347,7 +2455,7 @@ int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -2361,9 +2469,12 @@ int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_set_pwm_conf_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_set_pwm_conf_cnf(response);
@@ -2374,12 +2485,14 @@ int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
@@ -2387,7 +2500,7 @@ int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
         printf("No interface available\n");
     }
 
-    return result;
+    return rv;
 }
 void dump_mtk_vs_set_tx_cali_cnf(struct hpav_mtk_vs_set_tx_cali_cnf *response) {
     int sta_num = 1;
@@ -2471,6 +2584,7 @@ int test_mme_mtk_vs_set_tx_cali_req(int interface_num_to_open, int argc,
                                     char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
 
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
@@ -2484,7 +2598,7 @@ int test_mme_mtk_vs_set_tx_cali_req(int interface_num_to_open, int argc,
 		printf("Mandatory parameter : sta_mac_address enable\n");
 		printf("sta_mac_address : MAC address of the destination STA\n");
 		printf("enable : 0x00/Ox01 = Disable/Enable transmission PSD calibration featur\n");
-		return -1;
+		return EXIT_USAGE;
 	}
 
     if (interfaces != NULL) {
@@ -2513,7 +2627,7 @@ int test_mme_mtk_vs_set_tx_cali_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -2528,9 +2642,12 @@ int test_mme_mtk_vs_set_tx_cali_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_set_tx_cali_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_set_tx_cali_cnf(response);
@@ -2541,19 +2658,21 @@ int test_mme_mtk_vs_set_tx_cali_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 int test_mme_mtk_vs_spi_stats_req(int interface_num_to_open, int argc,
@@ -2561,12 +2680,14 @@ int test_mme_mtk_vs_spi_stats_req(int interface_num_to_open, int argc,
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
     unsigned int command;
+    int rv = EXIT_SUCCESS;
+
     // Parameters
     if (argc < 2) {
         printf("Mandatory parameters : sta_mac_address command\n");
         printf("sta_mac_address : MAC address of the destination STA\n");
         printf("command : 0 to get stats, 1 to reset stats\n");
-        return -1;
+        return EXIT_USAGE;
     }
     command = atoi(argv[1]);
     // Get list of interfaces from libhpav
@@ -2603,7 +2724,7 @@ int test_mme_mtk_vs_spi_stats_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -2619,9 +2740,12 @@ int test_mme_mtk_vs_spi_stats_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_spi_stats_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_spi_stats_cnf(response);
@@ -2632,19 +2756,21 @@ int test_mme_mtk_vs_spi_stats_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_set_tx_cali_ind(struct hpav_mtk_vs_set_tx_cali_ind *response) {
@@ -2683,6 +2809,8 @@ int test_mme_mtk_vs_set_tx_cali_ind(int interface_num_to_open, int argc,
                                     char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
         printf("An error occured. Dumping error stack...\n");
@@ -2721,9 +2849,12 @@ int test_mme_mtk_vs_set_tx_cali_ind(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_set_tx_cali_ind(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_set_tx_cali_ind(response);
@@ -2734,19 +2865,21 @@ int test_mme_mtk_vs_set_tx_cali_ind(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_vc_vs_set_sniffer_conf_cnf(struct hpav_vc_vs_set_sniffer_conf_cnf*
@@ -2781,6 +2914,7 @@ int test_mme_vc_vs_set_sniffer_conf_req(int interface_num_to_open, int argc,
     char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
     // Get list of interfaces from libhpav
 
     int sniffer_mode;
@@ -2791,7 +2925,7 @@ int test_mme_vc_vs_set_sniffer_conf_req(int interface_num_to_open, int argc,
             "sta_mac_address : MAC address of the destination STA\n"\
             "mode:  0 (MSDU Sniffer mode), 1 (MPDU Sniffer mode) \n" \
             "Ex: 00:11:22:33:44:55 1\n");
-        return -1;
+        return EXIT_USAGE;
     }
     sniffer_mode = atoi(argv[1]);
 
@@ -2845,10 +2979,13 @@ int test_mme_vc_vs_set_sniffer_conf_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 }
                 else {
                     // Dump response
                     dump_vc_vs_set_sniffer_conf_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_vc_vs_set_sniffer_conf_cnf(response);
@@ -2860,6 +2997,7 @@ int test_mme_vc_vs_set_sniffer_conf_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         }
         else {
@@ -2867,6 +3005,7 @@ int test_mme_vc_vs_set_sniffer_conf_req(int interface_num_to_open, int argc,
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                 interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
@@ -2874,7 +3013,7 @@ int test_mme_vc_vs_set_sniffer_conf_req(int interface_num_to_open, int argc,
     else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 void dump_vc_vs_get_remote_access_cnf(
@@ -2907,6 +3046,8 @@ int test_mme_vc_vs_get_remote_access_req(int interface_num_to_open, int argc,
                                       char *argv[]) {
     struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    int rv = EXIT_SUCCESS;
+
     // Get list of interfaces from libhpav
     if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
         printf("An error occured. Dumping error stack...\n");
@@ -2941,7 +3082,7 @@ int test_mme_vc_vs_get_remote_access_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -2955,9 +3096,12 @@ int test_mme_vc_vs_get_remote_access_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_vc_vs_get_remote_access_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_vc_vs_get_remote_access_cnf(response);
@@ -2968,19 +3112,21 @@ int test_mme_vc_vs_get_remote_access_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 
@@ -3017,6 +3163,7 @@ int test_mme_vc_vs_set_remote_access_req(int interface_num_to_open, int argc,
     struct hpav_error *error_stack = NULL;
     int remote_access_mode;
     struct hpav_vc_vs_set_remote_access_req mme_sent;
+    int rv = EXIT_SUCCESS;
 
     if (argc < 2) {
         printf("vc_vs_set_remote_aceess_req num_interface sta_mac_address mode\n" \
@@ -3024,7 +3171,7 @@ int test_mme_vc_vs_set_remote_access_req(int interface_num_to_open, int argc,
                "sta_mac_address : MAC address of the destination STA\n"\
                "mode: 0 (Allow remote access), 1 (Prohibit remote access) \n" \
                " Ex: 00:11:22:33:44:55 1\n");
-        return -1;
+        return EXIT_USAGE;
     }
     remote_access_mode = atoi(argv[1]);
 
@@ -3062,7 +3209,7 @@ int test_mme_vc_vs_set_remote_access_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -3078,9 +3225,12 @@ int test_mme_vc_vs_set_remote_access_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_vc_vs_set_remote_access_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_vc_vs_set_remote_access_cnf(response);
@@ -3091,12 +3241,14 @@ int test_mme_vc_vs_set_remote_access_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
@@ -3104,7 +3256,7 @@ int test_mme_vc_vs_set_remote_access_req(int interface_num_to_open, int argc,
         printf("No interface available\n");
     }
 
-    return 0;
+    return rv;
 }
 
 void dump_mtk_vs_pwm_generation_cnf(
@@ -3135,6 +3287,7 @@ int test_mme_mtk_vs_pwm_generation_req(int interface_num_to_open, int argc,
     unsigned int pmw_mode;
     unsigned int pmw_freq;
     unsigned int pwm_duty_cycle;
+    int rv = EXIT_SUCCESS;
 
     // Parameters
     if (argc < 4) {
@@ -3145,7 +3298,7 @@ int test_mme_mtk_vs_pwm_generation_req(int interface_num_to_open, int argc,
         printf("frequency: (KHz)\n");
         printf("duty_cycle: (%%)\n");
         printf("Ex: 00:11:22:33:44:55 1 10 50\n");
-        return -1;
+        return EXIT_USAGE;
     }
     pmw_mode = atoi(argv[1]);
     pmw_freq = atoi(argv[2]);
@@ -3185,7 +3338,7 @@ int test_mme_mtk_vs_pwm_generation_req(int interface_num_to_open, int argc,
                 if (argc > 0) {
                     if (!hpav_stomac(argv[0], dest_mac)) {
                         printf("An error occured. Input mac value is in valid format...\n");
-                        return -1;
+                        return EXIT_USAGE;
                     }
                 }
 
@@ -3204,9 +3357,12 @@ int test_mme_mtk_vs_pwm_generation_req(int interface_num_to_open, int argc,
                     printf("An error occured. Dumping error stack...\n");
                     hpav_dump_error_stack(error_stack);
                     hpav_free_error_stack(&error_stack);
+                    rv = EXIT_FAILURE;
                 } else {
                     // Dump response
                     dump_mtk_vs_pwm_generation_cnf(response);
+                    if (response == NULL)
+                        rv = EXIT_NO_RESPONSE;
                 }
                 // Free response
                 hpav_free_mtk_vs_pwm_generation_cnf(response);
@@ -3217,19 +3373,21 @@ int test_mme_mtk_vs_pwm_generation_req(int interface_num_to_open, int argc,
                 printf("Error while opening the interface\n");
                 hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
+                rv = EXIT_FAILURE;
             }
         } else {
             unsigned int num_interfaces =
                 hpav_get_number_of_interfaces(interfaces);
             printf("Interface number %d not found (0-%d available)\n",
                    interface_num_to_open, (num_interfaces - 1));
+            rv = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);
     } else {
         printf("No interface available\n");
     }
-    return 0;
+    return rv;
 }
 
 #define PARSE_NEXT_YES 1
@@ -3500,7 +3658,7 @@ int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
         /* Check if specific mac address */
         if (!hpav_stomac(argv[0], tmp_dest_mac)) {
             printf("An error occured. Input mac value is in valid format...\n");
-            return -1;
+            return EXIT_USAGE;
         }
         for (i = 0; i < ETH_MAC_ADDRESS_SIZE; ++i)
             mac_result |= tmp_dest_mac[i];
@@ -3522,7 +3680,7 @@ int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
             "[write WRITE input WRITE] [read READ] [debug]\n"
             "[save READ output OUTPUT] [delete DELETE]\n"
             "[listdir DIR] [format] [all] [scan-sta]\n");
-        return MTK_VS_FILE_ACCESS_REQ_PARAMETER_FAIL;
+        return EXIT_USAGE;
     }
 
     if (cmd->all_flag) {
@@ -3530,7 +3688,7 @@ int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
         while (fp != NULL && fscanf(fp, "%s", mac_str) != EOF) {
             if (!hpav_stomac(mac_str, mac_list[sta_count])) {
                 printf("An error occured. Input mac value is in valid format...\n");
-                return -1;
+                return EXIT_USAGE;
             }
             ++sta_count;
         }
@@ -3726,7 +3884,7 @@ int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
                 hpav_get_number_of_interfaces(interfaces);
             test_mtk_printf("Interface number %d not found (0-%d available)\n",
                             interface_num_to_open, (num_interfaces - 1));
-            result = MTK_VS_FILE_ACCESS_REQ_FAIL;
+            result = EXIT_USAGE;
         }
         // Free list of interfaces
         hpav_free_interfaces(interfaces);

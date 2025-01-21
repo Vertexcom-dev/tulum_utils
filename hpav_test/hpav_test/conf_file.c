@@ -28,6 +28,7 @@
 #include "parson.h"
 #include "stdbool.h"
 #include "stdio.h"
+#include "exitcodes.h"
 
 #ifdef WIN32
 #include "windows.h"
@@ -48,6 +49,7 @@ int conf_file_read(int argc, char *argv[]) {
     char *param[5];
     bool inka_update_exist = false;
     do {
+        int rv = 0;
         if ((argc < 2) || (1 != strlen(argv[0])))
             break;
         /** Read inka.conf. */
@@ -62,7 +64,7 @@ int conf_file_read(int argc, char *argv[]) {
         if (test_mme_mtk_vs_file_access_req(atoi(argv[0]), 5, &param[0]) !=
             0) {
             printf("Failed : read inka.conf!\n");
-            return 0;
+            return -1;
         }
         /** Try to read inka_update.conf. inka_update.conf may not exist. */
         param[2] = DEVICE_INKA_UPDATE_CONF_PATH;
@@ -77,17 +79,19 @@ int conf_file_read(int argc, char *argv[]) {
                 printf("Failed : JSON merge!\n");
                 remove("inka.conf.tmp");
                 remove("inka_update.conf.tmp");
-                return 0;
+                return -1;
             }
         }
-        if (JSONSuccess != json_serialize_to_file(inka, argv[1]))
+        if (JSONSuccess != json_serialize_to_file(inka, argv[1])) {
             printf("Failed : JSON to file!\n");
+            rv = -1;
+        }
         remove("inka.conf.tmp");
         remove("inka_update.conf.tmp");
-        return 0;
+        return rv;
     } while (0);
     printf("Usage : hpav_test conf_file read if_num filename [mac_address]\n");
-    return 0;
+    return EXIT_USAGE;
 }
 
 int conf_file_write(int argc, char *argv[]) {
@@ -108,12 +112,14 @@ int conf_file_write(int argc, char *argv[]) {
         param[2] = DEVICE_INKA_CONF_PATH;
         param[3] = "input";
         param[4] = argv[1];
-        if (test_mme_mtk_vs_file_access_req(atoi(argv[0]), 5, &param[0]) != 0)
+        if (test_mme_mtk_vs_file_access_req(atoi(argv[0]), 5, &param[0]) != 0) {
             printf("Failed : write inka.conf!\n");
+            return -1;
+        }
         return 0;
     } while (0);
     printf("Usage : hpav_test conf_file write if_num filename [mac_address]\n");
-    return 0;
+    return EXIT_USAGE;
 }
 
 static void conf_file_parse_version(JSON_Object *object, int *version,
@@ -264,7 +270,7 @@ int conf_file_parse(int argc, char *argv[]) {
         JSON_Object *inka_object = json_value_get_object(inka_value);
         if (!inka_object) {
             printf("Failed : file content incorrect!\n");
-            return 0;
+            return -1;
         }
 
         JSON_Object *inka_hpav_object =
@@ -275,7 +281,7 @@ int conf_file_parse(int argc, char *argv[]) {
 
         if (!inka_hpav_object || !inka_cp_object || !inka_phy_object) {
             printf("Failed : file content incorrect!\n");
-            return 0;
+            return -1;
         }
 
         printf("\n");
@@ -308,7 +314,7 @@ int conf_file_parse(int argc, char *argv[]) {
         return 0;
     } while (0);
     printf("Usage : hpav_test conf_file parse filename\n");
-    return 0;
+    return EXIT_USAGE;
 }
 
 #define FCT_NAME_ENTRY(name, fct)                                              \
@@ -655,6 +661,7 @@ static const struct fct_name_t conf_file_modify_fct_name_table[] = {
 static conf_file_modify_t cfmodify;
 
 int conf_file_modify(int argc, char *argv[]) {
+    int result = -1;
     conf_file_modify_t *ctx = &cfmodify;
     do {
         if (argc < 3)
@@ -665,14 +672,14 @@ int conf_file_modify(int argc, char *argv[]) {
         ctx->inka_obj = json_value_get_object(inka_value);
         if (!ctx->inka_obj) {
             printf("Failed : file incorrect!\n");
-            return 0;
+            return -1;
         }
         ctx->inka_hpav_obj = json_object_get_object(ctx->inka_obj, "hpav");
         ctx->inka_cp_obj = json_object_get_object(ctx->inka_obj, "cp");
         ctx->inka_phy_obj = json_object_get_object(ctx->inka_obj, "phy");
         if (!ctx->inka_hpav_obj || !ctx->inka_cp_obj || !ctx->inka_phy_obj) {
             printf("Failed : file incorrect!\n");
-            return 0;
+            return -1;
         }
 
         int nb_fct = (sizeof(conf_file_modify_fct_name_table) /
@@ -681,7 +688,7 @@ int conf_file_modify(int argc, char *argv[]) {
         int i = 0;
         for (i = nb_fct; i >= 0; i--)
             if (strcmp(argv[1], conf_file_modify_fct_name_table[i].name) == 0) {
-                int result = conf_file_modify_fct_name_table[i].fct(ctx, argc - 2,
+                result = conf_file_modify_fct_name_table[i].fct(ctx, argc - 2,
                     &argv[2]);
                 if (0 == result) {
                     /** Update modified value to file. */
@@ -690,6 +697,7 @@ int conf_file_modify(int argc, char *argv[]) {
                 }
                 else if (result == -1) {
                     printf("[Error] %s is in invalid format or not a permitted value.\n", conf_file_modify_fct_name_table[i].name);
+                    result = EXIT_USAGE;
                     break;
                 }
                 else if (result == -2) {
@@ -706,5 +714,5 @@ int conf_file_modify(int argc, char *argv[]) {
     } while (0);
     /** Print help message. */
     conf_file_modify_help_message();
-    return 0;
+    return result;
 }

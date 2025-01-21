@@ -19,6 +19,19 @@ Running on Linux
 
 Usage
 
+  General Notes
+  
+    The tool uses the exit code to signal successful operation and errors.
+    However, this usually only reflects the host system side, but does not
+    reflect the execution status of e.g. a command sent to the chipset's firmware.
+    
+    On success, the tool returns with exit code 0. On general errors, ie.
+    not the special cases mentioned below, the tool return with exit code 1.
+    On usage errors, e.g. wrong MAC address format, wrong parameter count
+    or similar, the tool returns with exit code 2.
+    On commands with network communication, the tool returns with exit code 3
+    in case no station responded to the request.
+
   Network Interface Number
 
     Most hpav_test commands require a network interface. Determine the
@@ -26,7 +39,7 @@ Usage
 
       hpav_test list_if
 
-    On Linxu the results will look something like:
+    On Linux the results will look something like:
 
         Interface 0 : eth0 (MAC : 08:00:27:f4:35:e9)
         Interface 1 : lo (MAC : 00:00:00:00:00:00)
