@@ -45,23 +45,23 @@ typedef struct {
     int endCarrier;
 } NotchCarrierRange;
 
-int conf_file_read(int argc, char *argv[]) {
+int conf_file_read(hpav_chan_t *channel, int argc, char *argv[]) {
     char *param[5];
     bool inka_update_exist = false;
     do {
         int rv = 0;
-        if ((argc < 2) || (1 != strlen(argv[0])))
+        if (argc < 1)
             break;
         /** Read inka.conf. */
-        if (argc > 2)
-            param[0] = argv[2];
+        if (argc > 1)
+            param[0] = argv[1];
         else
             param[0] = MTK_LINK_LOCAL_ADDR;
         param[1] = "save";
         param[2] = DEVICE_INKA_CONF_PATH;
         param[3] = "output";
         param[4] = "inka.conf.tmp";
-        if (test_mme_mtk_vs_file_access_req(atoi(argv[0]), 5, &param[0]) !=
+        if (test_mme_mtk_vs_file_access_req(channel, 5, &param[0]) !=
             0) {
             printf("Failed : read inka.conf!\n");
             return -1;
@@ -69,7 +69,7 @@ int conf_file_read(int argc, char *argv[]) {
         /** Try to read inka_update.conf. inka_update.conf may not exist. */
         param[2] = DEVICE_INKA_UPDATE_CONF_PATH;
         param[4] = "inka_update.conf.tmp";
-        if (test_mme_mtk_vs_file_access_req(atoi(argv[0]), 5, &param[0]) == 0)
+        if (test_mme_mtk_vs_file_access_req(channel, 5, &param[0]) == 0)
             inka_update_exist = true;
         JSON_Value *inka = json_parse_file("inka.conf.tmp");
         /** Merge inka.conf and inka_update.conf if needed. */
@@ -82,7 +82,7 @@ int conf_file_read(int argc, char *argv[]) {
                 return -1;
             }
         }
-        if (JSONSuccess != json_serialize_to_file(inka, argv[1])) {
+        if (JSONSuccess != json_serialize_to_file(inka, argv[0])) {
             printf("Failed : JSON to file!\n");
             rv = -1;
         }
@@ -90,35 +90,35 @@ int conf_file_read(int argc, char *argv[]) {
         remove("inka_update.conf.tmp");
         return rv;
     } while (0);
-    printf("Usage : hpav_test conf_file read if_num filename [mac_address]\n");
+    printf("Usage : hpav_test conf_file read interface filename [mac_address]\n");
     return EXIT_USAGE;
 }
 
-int conf_file_write(int argc, char *argv[]) {
+int conf_file_write(hpav_chan_t *channel, int argc, char *argv[]) {
     char *param[5];
     do {
-        if ((argc < 2) || (1 != strlen(argv[0])))
+        if (argc < 1)
             break;
         /** Try to delete inka_update.conf. */
-        if (argc >= 3)
-            param[0] = argv[2];
+        if (argc >= 2)
+            param[0] = argv[1];
         else
             param[0] = MTK_LINK_LOCAL_ADDR;
         param[1] = "delete";
         param[2] = DEVICE_INKA_UPDATE_CONF_PATH;
-        test_mme_mtk_vs_file_access_req(atoi(argv[0]), 3, &param[0]);
+        test_mme_mtk_vs_file_access_req(channel, 3, &param[0]);
         /** Write file to device. */
         param[1] = "write";
         param[2] = DEVICE_INKA_CONF_PATH;
         param[3] = "input";
-        param[4] = argv[1];
-        if (test_mme_mtk_vs_file_access_req(atoi(argv[0]), 5, &param[0]) != 0) {
+        param[4] = argv[0];
+        if (test_mme_mtk_vs_file_access_req(channel, 5, &param[0]) != 0) {
             printf("Failed : write inka.conf!\n");
             return -1;
         }
         return 0;
     } while (0);
-    printf("Usage : hpav_test conf_file write if_num filename [mac_address]\n");
+    printf("Usage : hpav_test conf_file write interface filename [mac_address]\n");
     return EXIT_USAGE;
 }
 
@@ -548,7 +548,7 @@ static int conf_file_modify_psd_cali(conf_file_modify_t *ctx, int argc,
         }
     }
 
-    // Caculate
+    // Calculate
     for (i = 0; i < lines; i++) {
         char tmp_char[20];
         pch = strtok(carrier_range_array[i], "-");

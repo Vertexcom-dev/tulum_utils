@@ -21,7 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-int conf_file_read(int argc, char *argv[]);
-int conf_file_write(int argc, char *argv[]);
+#include "hpav_api.h"
+
+int conf_file_read(hpav_chan_t *channel, int argc, char *argv[]);
+int conf_file_write(hpav_chan_t *channel, int argc, char *argv[]);
 int conf_file_parse(int argc, char *argv[]);
 int conf_file_modify(int argc, char *argv[]);

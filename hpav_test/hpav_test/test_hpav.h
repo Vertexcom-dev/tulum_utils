@@ -21,5 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-int test_mme_cm_set_key_req(int interface_num_to_open, int argc, char *argv[]);
-int test_mme_cm_amp_map_req(int interface_num_to_open, int argc, char *argv[]);
+#include "hpav_api.h"
+
+int test_mme_cm_set_key_req(hpav_chan_t *channel, int argc, char *argv[]);
+int test_mme_cm_amp_map_req(hpav_chan_t *channel, int argc, char *argv[]);

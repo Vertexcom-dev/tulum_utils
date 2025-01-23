@@ -34,6 +34,7 @@
 #include "exitcodes.h"
 
 #include <stdarg.h>
+#include <stdbool.h>
 
 
 #define FCT_NAME_ENTRY(name, fct)                                              \
@@ -46,9 +47,93 @@ struct fct_name_t {
 #define TEST_MME_FCT_NAME_ENTRY(name)                                          \
     { test_mme_##name, #name }
 struct test_mme_fct_name_t {
-    int (*fct)(int interface_num_to_open, int argc, char *argv[]);
+    int (*fct)(hpav_chan_t *channel, int argc, char *argv[]);
     char name[60];
 };
+
+// Opens a channel on given interface (can be interface number or name)
+// On success, channel is populated and zero is returned; otherwise a non-zero
+// return value is used to indicate an error.
+int open_channel(char *if_name_or_index, hpav_chan_t **channel) {
+    struct hpav_error *error_stack;
+    struct hpav_if *interfaces, *iface;
+    bool was_index = false;
+    unsigned int if_num;
+    int rv = 0;
+
+    // Get list of interfaces from libhpav
+    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
+        hpav_dump_error_stack(error_stack);
+        hpav_free_error_stack(&error_stack);
+        return -1;
+    }
+
+    if (interfaces == NULL) {
+        printf("No interface available\n");
+        return 0;
+    }
+
+    // Get interface
+    iface = hpav_get_interface_by_index_or_name(interfaces, if_name_or_index,
+                                                &was_index, &if_num);
+    if (iface == NULL) {
+        if (was_index) {
+            unsigned int num_interfaces =
+                hpav_get_number_of_interfaces(interfaces);
+            printf("Interface number %s not found (0-%d available)\n",
+                   if_name_or_index, num_interfaces - 1);
+        } else {
+            printf("Interface '%s' not found. Use 'hpav_test list_if' to list available ones.\n",
+                   if_name_or_index);
+        }
+        rv = EXIT_USAGE;
+        goto free_out;
+    }
+
+    // Open the interface
+    printf("Opening interface %d : %s (%s)\n", if_num, iface->name,
+           iface->description ? iface->description : "no description");
+    *channel = hpav_open_channel(iface, &error_stack);
+    if (*channel == NULL) {
+        printf("Error while opening the interface\n");
+        hpav_dump_error_stack(error_stack);
+        hpav_free_error_stack(&error_stack);
+        rv = EXIT_FAILURE;
+        goto free_out;
+    }
+
+    printf("Interface successfully opened\n");
+
+free_out:
+    // Free list of interfaces
+    hpav_free_interfaces(interfaces);
+    return rv;
+}
+
+void close_channel(hpav_chan_t *channel) {
+    // Close channel
+    hpav_close_channel(channel);
+    printf("Interface closed\n");
+}
+
+int execute_on_channel(char *if_name_or_index,
+                       int (*fct)(hpav_chan_t *channel, int argc, char *argv[]),
+                       int argc, char *argv[]) {
+    hpav_chan_t *channel;
+    int rv;
+
+    rv = open_channel(if_name_or_index, &channel);
+    if (rv)
+        return rv;
+
+    // we call the function only if given -> so we can support 'open_if' command
+    if (fct)
+        rv = fct(channel, argc, argv);
+
+    close_channel(channel);
+    return rv;
+}
 
 // List available interfaces
 int list_interfaces(int argc, char *argv[]) {
@@ -65,8 +150,8 @@ int list_interfaces(int argc, char *argv[]) {
             printf("No interfaces available\n");
         }
     } else {
-        printf("An error occured. Dumping error stack...\n");
-        // An error occured, dump error_stack
+        printf("An error occurred. Dumping error stack...\n");
+        // An error occurred, dump error_stack
         hpav_dump_error_stack(error_stack);
         // return with error
         return EXIT_FAILURE;
@@ -76,69 +161,14 @@ int list_interfaces(int argc, char *argv[]) {
 
 // Open given interface
 int open_interface(int argc, char *argv[]) {
-    // The interface to open is a number from 0 to n-1 (n interfaces returned by
-    // hpav_get_interfaces)
-    struct hpav_if *interfaces = NULL;
-    struct hpav_error *error_stack = NULL;
-    int interface_num_to_open = -1;
-    int rv = EXIT_SUCCESS;
     // This is the first and only argument
     if (argc != 1) {
-        printf("Usage : hpav_test open_if interface_number\n(starts at 0)\n");
+        printf("Usage : hpav_test open_if interface\n\ninterface can be name or"
+               " number (which starts at 0), see 'hpav_test list_if'\n");
         return EXIT_USAGE;
     }
 
-    // Get interface number
-    interface_num_to_open = atoi(argv[0]);
-
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
-        hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
-        return EXIT_FAILURE;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                printf("Interface successfully opened\n");
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, num_interfaces - 1);
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
-    } else {
-        printf("No interface available\n");
-    }
-    return rv;
+    return execute_on_channel(argv[0], NULL, 0, NULL);
 }
 
 static const struct test_mme_fct_name_t test_mme_fct_name_table[] = {
@@ -180,16 +210,15 @@ int test_mme(int argc, char *argv[]) {
     if ((argc > 1) && (1 <= strlen(argv[1]))) {
         for (i = nb_fct; i >= 0; i--) {
             if (strcmp(argv[0], test_mme_fct_name_table[i].name) == 0) {
-                int rv =
-                    test_mme_fct_name_table[i].fct(atoi(argv[1]), argc - 2,
-                                                   &argv[2]);
-                return rv;
+                return execute_on_channel(argv[1],
+                                          test_mme_fct_name_table[i].fct,
+                                          argc - 2, &argv[2]);
             }
         }
     }
 
     printf("Usage : hpav_test test_mme mme_name(partial or full) interface "
-           "number [mac_address [parameters]]\n");
+           "[mac_address [parameters]]\n");
     printf("\nmme_name can be :\n   ");
     for (i = 0; i < nb_fct; i++) {
         if (filter) {
@@ -233,249 +262,106 @@ print_usage:
 }
 
 int conf_file(int argc, char *argv[]) {
-    int rv = EXIT_USAGE;
     test_mme_mtk_printf_silence();
     if (argc >= 1) {
         if (strcmp(argv[0], "read") == 0) {
-            rv = conf_file_read(argc - 1, &argv[1]);
+            if (argc >= 2)
+                return execute_on_channel(argv[1], conf_file_read, argc - 2, &argv[2]);
+
+            printf("Usage : hpav_test conf_file read interface filename [mac_address]\n");
         } else if (strcmp(argv[0], "write") == 0) {
-            rv = conf_file_write(argc - 1, &argv[1]);
+            if (argc >= 2)
+                return execute_on_channel(argv[1], conf_file_write, argc - 2, &argv[2]);
+
+            printf("Usage : hpav_test conf_file write interface filename [mac_address]\n");
         } else if (strcmp(argv[0], "parse") == 0) {
-            rv = conf_file_parse(argc - 1, &argv[1]);
+            return conf_file_parse(argc - 1, &argv[1]);
         } else if (strcmp(argv[0], "modify") == 0) {
-            rv = conf_file_modify(argc - 1, &argv[1]);
-        } else {
-            goto print_usage;
+            return conf_file_modify(argc - 1, &argv[1]);
         }
     } else {
-print_usage:
         printf("Usage : hpav_test conf_file read|write|parse|modify\n");
     }
-    return rv;
+    return EXIT_USAGE;
 }
 
 int test_nvram(int argc, char *argv[]) {
-    int rv = EXIT_USAGE;
     if (argc >= 1) {
         if (strcmp(argv[0], "read") == 0) {
-            rv = test_nvram_read(argc - 1, &argv[1]);
+            if (argc >= 2)
+                return execute_on_channel(argv[1], test_nvram_read, argc - 2, &argv[2]);
+
+            printf("Usage: $hpav_test nvram read interface mac output_file\n");
         } else if (strcmp(argv[0], "write") == 0) {
-            rv = test_nvram_write(argc - 1, &argv[1]);
+            if (argc >= 2)
+                return execute_on_channel(argv[1], test_nvram_write, argc - 2, &argv[2]);
+
+            printf("Usage: $hpav_test nvram write interface mac input_file\n");
         } else if (strcmp(argv[0], "parse") == 0) {
-            rv = test_nvram_parse(argc - 1, &argv[1]);
+            return test_nvram_parse(argc - 1, &argv[1]);
         } else if (strcmp(argv[0], "modify") == 0) {
-            rv = test_nvram_modify(argc - 1, &argv[1]);
-        } else {
-            goto print_usage;
+            return test_nvram_modify(argc - 1, &argv[1]);
         }
     } else {
-print_usage:
-        printf("Usage: hpav_test nvram read | write | parse | modify\n");
+        printf("Usage : hpav_test nvram read|write|parse|modify\n");
     }
-    return rv;
+    return EXIT_USAGE;
 }
 
 int test_reboot(int argc, char *argv[]) {
-    if (argc >= 1) {
-        int interface_num_to_open = atoi(argv[0]);
-        struct hpav_if *interfaces = NULL;
-        struct hpav_error *error_stack = NULL;
-        int rv = EXIT_SUCCESS;
-
-        if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-            printf("An error occured. Dumping error stack...\n");
-            hpav_dump_error_stack(error_stack);
-            hpav_free_error_stack(&error_stack);
-            return EXIT_FAILURE;
-        }
-
-        if (interfaces != NULL) {
-            struct hpav_if *interface_to_open = NULL;
-            interface_to_open =
-                hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-            if (interface_to_open != NULL) {
-                struct hpav_chan *current_chan = NULL;
-                current_chan =
-                    hpav_open_channel(interface_to_open, &error_stack);
-                if (current_chan != NULL) {
-                    int result = -1;
-                    struct hpav_mtk_vs_reset_req mme_sent;
-                    struct hpav_mtk_vs_reset_cnf *response;
-                    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                    if (argc >= 2) {
-                        if (!hpav_stomac(argv[1], dest_mac)) {
-                            printf("An error occured. Input mac value is in valid format...\n");
-                            return EXIT_FAILURE;
-                        }
-                    }
-                    else {
-                        unsigned char link_local_mac[ETH_MAC_ADDRESS_SIZE] = {
-                            0x0, 0x13, 0xD7, 0x0, 0x0, 0x01};
-                        memcpy(dest_mac, link_local_mac, 6);
-                    }
-
-                    result = hpav_mtk_vs_reset_sndrcv(current_chan, dest_mac,
-                                                        &mme_sent, &response,
-                                                        1000, 0, &error_stack);
-                    if (result != HPAV_OK) {
-                        printf("An error occured. Dumping error stack...\n");
-                        hpav_dump_error_stack(error_stack);
-                        hpav_free_error_stack(&error_stack);
-                        rv = EXIT_FAILURE;
-                    }
-                    else {
-                        int sta_num = 1;
-                        if (response == NULL) {
-                            printf("No STA answered\n\n");
-                            rv = EXIT_NO_RESPONSE;
-                        }
-                        while (response != NULL) {
-                            char buffer[64];
-                            printf("Station %d :\n", sta_num);
-                            printf("MAC address                                           : %s\n",
-                                hpav_mactos(response->sta_mac_addr, buffer));
-                            printf("Result                                                : %d\n",
-                                response->result);
-                            printf("\n");
-                            sta_num++;
-                            response = response->next;
-                        }
-                    }
-
-                    hpav_free_mtk_vs_reset_cnf(response);
-                    hpav_close_channel(current_chan);
-                } else {
-                    printf("Error while opening the interface\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                }
-            } else {
-                unsigned int num_interfaces =
-                    hpav_get_number_of_interfaces(interfaces);
-                printf("Interface number %d not found (0-%d available)\n",
-                       interface_num_to_open, (num_interfaces - 1));
-                rv = EXIT_USAGE;
-            }
-            hpav_free_interfaces(interfaces);
-        } else
-            printf("No interface available\n");
-        return rv;
+    if (argc > 0 && argc < 2) {
+        return execute_on_channel(argv[0],
+                                  test_mme_mtk_vs_reset_req,
+                                  argc - 1, &argv[1]);
     }
-    printf("Usage: hpav_test reboot if_num [mac]\n");
+    printf("Usage: hpav_test reboot interface [mac]\n");
     return EXIT_USAGE;
 }
 
 int test_find_local_sta(int argc, char *argv[]) {
-    if (0 <= argc && argc <= 1) {
-        struct hpav_if *interfaces = NULL;
-        struct hpav_error *error_stack = NULL;
-        struct hpav_chan *current_chan = NULL;
-        struct hpav_if *interface_to_open = NULL;
-        int interface_num_to_open = 0;
-        struct hpav_mtk_vs_get_nw_info_req mme_sent;
-        struct hpav_mtk_vs_get_nw_info_cnf *response;
-        unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {0xff, 0xff, 0xff,
-                                                        0xff, 0xff, 0xff};
-        int rv = EXIT_SUCCESS;
-        unsigned int i = 0;
-        int result = -1;
+    struct hpav_error *error_stack = NULL;
+    struct hpav_if *interfaces = NULL;
+    struct hpav_if *current_interface = NULL;
+    int rv = EXIT_SUCCESS;
 
-
-        // Get list of interfaces from libhpav
-        if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-            printf("An error occured. Dumping error stack...\n");
-            hpav_dump_error_stack(error_stack);
-            hpav_free_error_stack(&error_stack);
-            return EXIT_FAILURE;
-        }
-
-        if (NULL == interfaces) {
-            printf("No interface available\n");
-            return EXIT_SUCCESS;
-        }
-
-        // Get overall count of available interfaces
-        unsigned int if_number = hpav_get_number_of_interfaces(interfaces);
-
-        // In case optional parameter if_num is given, just operate on that
-        if (argc == 1) {
-            // Get interface number
-            interface_num_to_open = atoi(argv[0]);
-            // Check that interface number does not exceed available interface numbers
-            if (interface_num_to_open < 0 || interface_num_to_open >= if_number) {
-                printf("Interface number %d not found (0-%d available)\n",
-                       interface_num_to_open, if_number - 1);
-                return -1;
-            }
-            // Adjust limit for loop
-            if_number = interface_num_to_open + 1;
-        }
-
-        for (i = interface_num_to_open; i < if_number; i++) {
-            // Get interface
-            interface_to_open = hpav_get_interface_by_index(interfaces, i);
-
-            printf("\nOpening interface %d : %s (%s)\n", i,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (NULL == current_chan) {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                hpav_free_interfaces(interfaces);
-                return EXIT_FAILURE;
-            }
-
-            // Sending MME on the channel
-            printf("Interface successfully opened\n");
-            printf("Sending Mstar VS_GET_NW_INFO.REQ on the channel\n");
-            memset(&mme_sent, 0x0,
-                   sizeof(struct hpav_mtk_vs_get_nw_info_req));
-            result = hpav_mtk_vs_get_nw_info_sndrcv(current_chan, dest_mac,
-                                                      &mme_sent, &response,
-                                                      1000, 0, &error_stack);
-            if (result != HPAV_OK) {
-                printf("An error occured. Dumping error stack...\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            } else {
-                if (NULL == response) {
-                    printf("No STA answered\n\n");
-                    rv = EXIT_NO_RESPONSE;
-                }
-                int sta_num = 1;
-                while (response != NULL)
-                {
-                    char buffer[64];
-                    printf("Station %d :\n", sta_num);
-                    printf("MAC address                                           : %s\n",
-                        hpav_mactos(response->sta_mac_addr, buffer));
-                    sta_num++;
-                    response = response->next;
-                }
-            }
-
-            // Free response
-            hpav_free_mtk_vs_get_nw_info_cnf(response);
-            // Close channel
-            hpav_close_channel(current_chan);
-            printf("Interface closed\n");
-        }
-
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
-
-        return rv;
+    if (argc > 1) {
+        printf("Usage: hpav_test find_local_sta [interface]\n");
+        return EXIT_USAGE;
     }
-    printf("Usage: hpav_test find_local_sta [if_num]\n");
-    return EXIT_USAGE;
+
+    if (argc == 1) {
+        return execute_on_channel(argv[0],
+                                  test_mme_mtk_vs_get_nw_info_req,
+                                  argc - 1, &argv[1]);
+    }
+
+    // Get list of interfaces from libhpav
+    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
+        hpav_dump_error_stack(error_stack);
+        hpav_free_error_stack(&error_stack);
+        return EXIT_FAILURE;
+    }
+
+    if (interfaces == NULL) {
+        printf("No interface available\n");
+        return EXIT_SUCCESS;
+    }
+
+    current_interface = interfaces;
+    while (current_interface != NULL) {
+        int result =
+            execute_on_channel(current_interface->name,
+                               test_mme_mtk_vs_get_nw_info_req,
+                               argc - 1, &argv[1]);
+        // remember error for exit code, but continue
+        if (result)
+            rv = EXIT_FAILURE;
+        current_interface = current_interface->next;
+    }
+
+    hpav_free_interfaces(interfaces);
+    return rv;
 }
 
 int test_fw_upgrade(int argc, char *argv[]) {
@@ -486,15 +372,17 @@ int test_fw_upgrade(int argc, char *argv[]) {
         param[1] = "bootloader";
         param[2] = "input";
         param[3] = argv[2];
-        result = test_mme_mtk_vs_file_access_req(atoi(argv[0]), 4, &param[0]);
+        result = execute_on_channel(argv[0], test_mme_mtk_vs_file_access_req, 4, &param[0]);
+        if (result)
+            return result;
         param[1] = "simage";
         param[2] = argv[3];
         param[3] = "input";
         param[4] = argv[3];
-        result = test_mme_mtk_vs_file_access_req(atoi(argv[0]), 5, &param[0]);
+        result = execute_on_channel(argv[0], test_mme_mtk_vs_file_access_req, 5, &param[0]);
         return result;
     }
-    printf("Usage: hpav_test fw_upgrade if_num mac bootloader firmware\n");
+    printf("Usage: hpav_test fw_upgrade interface mac bootloader firmware\n");
     return EXIT_USAGE;
 }
 

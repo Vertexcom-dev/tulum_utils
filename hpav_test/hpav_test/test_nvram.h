@@ -21,6 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+#include "hpav_api.h"
+
 #if defined(_MSC_VER)
 #define __packed
 #define __packed_end
@@ -30,8 +32,8 @@
 #define __packed_end __attribute__((packed))
 #endif
 
-int test_nvram_read(int argc, char *argv[]);
-int test_nvram_write(int argc, char *argv[]);
+int test_nvram_read(hpav_chan_t *channel, int argc, char *argv[]);
+int test_nvram_write(hpav_chan_t *channel, int argc, char *argv[]);
 int test_nvram_parse(int argc, char *argv[]);
 int test_nvram_modify(int argc, char *argv[]);
 
