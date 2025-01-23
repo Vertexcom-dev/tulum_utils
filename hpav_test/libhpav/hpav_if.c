@@ -37,6 +37,7 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #endif
+#include <stdlib.h>
 
 #include "hpav_api.h"
 #include "pcap.h"
@@ -287,6 +288,56 @@ struct hpav_if *hpav_get_interface_by_index(struct hpav_if *interfaces,
         interface_num++;
     }
     return interface_result;
+}
+
+struct hpav_if *hpav_get_interface_by_name(struct hpav_if *interfaces,
+                                           char *if_name,
+                                           unsigned int *if_num) {
+    struct hpav_if *current_interface = interfaces;
+    unsigned int interface_num = 0;
+
+    while (current_interface != NULL) {
+        if (strcmp(current_interface->name, if_name) == 0) {
+            if (if_num)
+                *if_num = interface_num;
+            return current_interface;
+        }
+        current_interface = current_interface->next;
+        interface_num++;
+    }
+    return NULL;
+}
+
+/* Notes:
+ * 'was_index' is output parameter, if non-NULL pointer is given, then
+ * caller can get feedback whether the passed 'arg' was considered an index.
+ * 'if_num' is output parameter and if non-NULL pointer is given, it is updated
+ * with the interface number (if the interface found).
+ */
+struct hpav_if *hpav_get_interface_by_index_or_name(struct hpav_if *interfaces,
+                                                    char *arg,
+                                                    bool *was_index,
+                                                    unsigned int *if_num) {
+    unsigned int if_number;
+    char *endptr;
+
+    if_number = strtoul(arg, &endptr, 10);
+
+    /* try to detect whether it is a simple number string or an interface name
+     * by looking at the endptr: it is zero-length string if complete 'arg'
+     * could be converted to a number, then it is an index; otherwise we use
+     * it as interface name */
+    if (*endptr == '\0') {
+        if (was_index)
+            *was_index = 1;
+        if (if_num)
+            *if_num = if_number;
+        return hpav_get_interface_by_index(interfaces, if_number);
+    }
+
+    if (was_index)
+        *was_index = 0;
+    return hpav_get_interface_by_name(interfaces, arg, if_num);
 }
 
 unsigned int hpav_get_number_of_interfaces(struct hpav_if *interfaces) {

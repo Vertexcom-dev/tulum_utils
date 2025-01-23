@@ -25,6 +25,8 @@
 #ifndef HPAV_API_H
 #define HPAV_API_H
 
+#include <stdbool.h>
+
 #ifndef _WIN32
 #include <stdlib.h>
 #include <string.h>
@@ -141,6 +143,13 @@ int hpav_get_interfaces(struct hpav_if **interface_list,
 // Manage interfaces
 struct hpav_if *hpav_get_interface_by_index(struct hpav_if *interfaces,
                                             unsigned int if_num);
+struct hpav_if *hpav_get_interface_by_name(struct hpav_if *interfaces,
+                                           char *if_name,
+                                           unsigned int *if_num);
+struct hpav_if *hpav_get_interface_by_index_or_name(struct hpav_if *interfaces,
+                                                    char *arg,
+                                                    bool *was_index,
+                                                    unsigned int *if_num) ;
 unsigned int hpav_get_number_of_interfaces(struct hpav_if *interfaces);
 
 // Free a list of interfaces returned by hpav_get_interfaces
