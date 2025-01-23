@@ -31,150 +31,115 @@
 #include <arpa/inet.h>
 #endif
 
-int test_nvram_read(int argc, char *argv[]) {
-    if (argc < 3) {
-        printf("Usage: $hpav_test nvram read if_num mac output_file\n");
-        return EXIT_USAGE;
-    }
-    int interface_num_to_open = atoi(argv[0]);
-    struct hpav_if *interfaces = NULL;
+int test_nvram_read(hpav_chan_t *channel, int argc, char *argv[]) {
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_nvram_req mme_sent;
+    struct hpav_mtk_vs_get_nvram_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc < 2) {
+        printf("Usage : hpav_test nvram read interface mac output_file\n");
+        return EXIT_USAGE;
+    }
+    if (!hpav_stomac(argv[0], dest_mac)) {
+        printf("An error occurred. Input mac value is in valid format...\n");
+        return EXIT_USAGE;
+    }
+
+    /* REQ parameters (block_index): the size of nvram is not bigger
+     * than one block now */
+    mme_sent.index = (unsigned char)0;
+    // Sending MME on the channel
+    rv = hpav_mtk_vs_get_nvram_sndrcv(channel, dest_mac,
+                                      &mme_sent, &response,
+                                      1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_nvram_req mme_sent;
-                struct hpav_mtk_vs_get_nvram_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (!hpav_stomac(argv[1], dest_mac)) {
-                    printf("An error occured. Input mac value is in valid format...\n");
-                    return -1;
-                }
-
-                /* REQ parameters (block_index): the size of nvran is not bigger
-                 * than one block now */
-                mme_sent.index = (unsigned char)0;
-                // Sending MME on the channel
-                result = hpav_mtk_vs_get_nvram_sndrcv(current_chan, dest_mac,
-                                                      &mme_sent, &response,
-                                                      1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    int sta_num = 1, i, j;
-                    if (response != NULL) {
-                        char buffer[64];
-                        printf("Station %d :\n", sta_num);
-                        printf("MAC address                                    "
-                               "       : %s\n",
-                               hpav_mactos(response->sta_mac_addr, buffer));
-                        printf("Result                                         "
-                               "       : %s\n",
-                               (response->result == 0)
-                                   ? "SUCCESS"
-                                   : ((response->result == 1) ? "FAILURE"
-                                                              : "BAD_INDEX"));
-                        printf("Index                                          "
-                               "       : %d\n",
-                               response->index);
-                        printf("Nvram size                                     "
-                               "       : %d\n",
-                               (response->nvram_size));
-                        printf("NVRAM contents                                 "
-                               "       : \n");
-
-                        if (response->result == 0) {
-                            for (i = 0; i < 32; i++) {
-                                for (j = 0; j < 32; j++)
-                                    printf("%02x ", response->data[32 * i + j]);
-                                printf("\n");
-                            }
-                        } else {
-                            printf("No content.\n");
-                        }
-
-                        printf("\n");
-                        // Write nvram data into output_file
-                        FILE *nvram = NULL;
-                        nvram = fopen(argv[2], "w");
-                        if (NULL == nvram) {
-                            printf("error while creating file %s\n", argv[2]);
-                            return -1;
-                        }
-                        fwrite(&response->data, 1, response->nvram_size, nvram);
-                        fclose(nvram);
-
-                    } else {
-                        printf("No response. Get nvram fails.\n");
-                        rv = EXIT_NO_RESPONSE;
-                    }
-                }
-                // Free response
-                hpav_free_mtk_vs_get_nvram_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        int sta_num = 1, i, j;
+        if (response != NULL) {
+            char buffer[64];
+            printf("Station %d :\n", sta_num);
+            printf("MAC address                                    "
+                   "       : %s\n",
+                   hpav_mactos(response->sta_mac_addr, buffer));
+            printf("Result                                         "
+                   "       : %s\n",
+                   (response->result == 0)
+                       ? "SUCCESS"
+                       : ((response->result == 1) ? "FAILURE"
+                                                  : "BAD_INDEX"));
+            printf("Index                                          "
+                   "       : %d\n",
+                   response->index);
+            printf("Nvram size                                     "
+                   "       : %d\n",
+                   (response->nvram_size));
+            printf("NVRAM contents                                 "
+                   "       : \n");
+
+            if (response->result == 0) {
+                for (i = 0; i < 32; i++) {
+                    for (j = 0; j < 32; j++)
+                        printf("%02x ", response->data[32 * i + j]);
+                    printf("\n");
+                }
+            } else {
+                printf("No content.\n");
+            }
+
+            printf("\n");
+            // Write nvram data into output_file
+            FILE *nvram = NULL;
+            nvram = fopen(argv[1], "w");
+            if (NULL == nvram) {
+                printf("error while creating file %s\n", argv[1]);
+                return -1;
+            }
+            fwrite(&response->data, 1, response->nvram_size, nvram);
+            fclose(nvram);
+
+        } else {
+            printf("No response. Get nvram fails.\n");
+            rv = EXIT_NO_RESPONSE;
+        }
     }
+    // Free response
+    hpav_free_mtk_vs_get_nvram_cnf(response);
     return rv;
 }
 
-int test_nvram_write(int argc, char *argv[]) {
-    if (argc < 3) {
-        printf("Usage: $hpav_test nvram write if_num mac input_file\n");
-        return EXIT_USAGE;
-    }
-    int interface_num_to_open = atoi(argv[0]);
-    struct hpav_if *interfaces = NULL;
+int test_nvram_write(hpav_chan_t *channel, int argc, char *argv[]) {
     struct hpav_error *error_stack = NULL;
     unsigned char block_data[MTK_NVRAM_BLOCK_SIZE];
     FILE *nvram = NULL;
     unsigned short nvram_size = MTK_NVRAM_BLOCK_SIZE;
-    int block_index = atoi("0");
+    int block_index = 0;
+    struct hpav_mtk_vs_set_nvram_req mme_sent;
+    struct hpav_mtk_vs_set_nvram_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    nvram = fopen(argv[2], "r");
+    if (argc < 2) {
+        printf("Usage : hpav_test nvram write interface mac input_file\n");
+        return EXIT_USAGE;
+    }
+    if (!hpav_stomac(argv[0], dest_mac)) {
+        printf("An error occurred. Input mac value is in valid format...\n");
+        return EXIT_USAGE;
+    }
+
+    nvram = fopen(argv[1], "r");
     if (NULL == nvram) {
-        printf("error while opening file %s\n", argv[2]);
+        printf("error while opening file %s\n", argv[1]);
         return -1;
     }
 
@@ -184,89 +149,43 @@ int test_nvram_write(int argc, char *argv[]) {
 
     memset(block_data, 0, MTK_NVRAM_BLOCK_SIZE);
     if (1 != fread(block_data, nvram_size, 1, nvram)) {
-        printf("error while reading file %s\n", argv[2]);
+        printf("error while reading file %s\n", argv[1]);
         return -1;
     }
 
     fclose(nvram);
     nvram = NULL;
 
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
-        hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
+    // Parameters
+    mme_sent.block_index = block_index;
+    mme_sent.nvram_size = nvram_size;
+    if (xorchecksum(block_data, nvram_size, &mme_sent.checksum) ==
+        -1) {
+        printf("Calculate checksum error!\n");
         return -1;
     }
+    // handle Endian problem
+    mme_sent.checksum = htonl(mme_sent.checksum);
 
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_set_nvram_req mme_sent;
-                struct hpav_mtk_vs_set_nvram_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (!hpav_stomac(argv[1], dest_mac)) {
-                    printf("An error occured. Input mac value is in valid format...\n");
-                    return -1;
-                }
-
-                // Parameters
-                mme_sent.block_index = block_index;
-                mme_sent.nvram_size = nvram_size;
-                if (xorchecksum(block_data, nvram_size, &mme_sent.checksum) ==
-                    -1) {
-                    printf("Calculate checksum error!\n");
-                    return -1;
-                }
-                // handle Endian problem
-                mme_sent.checksum = htonl(mme_sent.checksum);
-
-                memcpy(mme_sent.data, block_data, nvram_size);
-                // Sending MME on the channel
-                result = hpav_mtk_vs_set_nvram_sndrcv(current_chan, dest_mac,
-                                                      &mme_sent, &response,
-                                                      1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    if (response == NULL) {
-                        printf("Failed to write nvram.\n");
-                        rv = EXIT_FAILURE;
-                    } else {
-                        if (response->result == 0)
-                            printf("Write nvram successfully.\n");
-                    }
-                }
-                hpav_free_mtk_vs_set_nvram_cnf(response);
-                hpav_close_channel(current_chan);
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        hpav_free_interfaces(interfaces);
+    memcpy(mme_sent.data, block_data, nvram_size);
+    // Sending MME on the channel
+    rv = hpav_mtk_vs_set_nvram_sndrcv(channel, dest_mac, &mme_sent, &response,
+                                      1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
+        hpav_dump_error_stack(error_stack);
+        hpav_free_error_stack(&error_stack);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        if (response == NULL) {
+            printf("Failed to write nvram.\n");
+            rv = EXIT_FAILURE;
+        } else {
+            if (response->result == 0)
+                printf("Write nvram successfully.\n");
+        }
     }
+    hpav_free_mtk_vs_set_nvram_cnf(response);
     return rv;
 }
 
@@ -306,7 +225,7 @@ int test_nvram_parse(int argc, char *argv[]) {
 
 int test_nvram_modify(int argc, char *argv[]) {
     if (argc < 3 || (argc & 1) == 0) {
-        printf("Usage: $hpav_test nvram modify input_file mac "
+        printf("Usage : hpav_test nvram modify input_file mac "
                "xx:xx:xx:xx:xx:xx\n");
         return EXIT_USAGE;
     }
@@ -341,7 +260,7 @@ int test_nvram_modify(int argc, char *argv[]) {
         }
         memcpy(modify_data.mac, mac_data, sizeof(modify_data.mac));
     } else {
-        printf("Usage: $hpav_test nvram modify input_file mac "
+        printf("Usage : hpav_test nvram modify input_file mac "
                "xx:xx:xx:xx:xx:xx\n");
         return EXIT_USAGE;
     }

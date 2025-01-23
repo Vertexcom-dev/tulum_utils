@@ -21,66 +21,68 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+#include "hpav_api.h"
+
 // Declaration for Intellon test functions
 typedef unsigned int u_int32_t;
 void test_mme_mtk_printf_silence(void);
-int test_mme_mtk_vs_get_version_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_version_req(hpav_chan_t *channel, int argc,
                                     char *argv[]);
-int test_mme_mtk_vs_reset_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_reset_req(hpav_chan_t *channel, int argc,
                               char *argv[]);
-int test_mme_mtk_vs_reset_ind(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_reset_ind(hpav_chan_t *channel, int argc,
                               char *argv[]);
-int test_mme_mtk_vs_get_tonemask_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_tonemask_req(hpav_chan_t *channel, int argc,
                                      char *argv[]);
-int test_mme_mtk_vs_get_eth_phy_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_eth_phy_req(hpav_chan_t *channel, int argc,
                                     char *argv[]);
-int test_mme_mtk_vs_eth_stats_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_eth_stats_req(hpav_chan_t *channel, int argc,
                                   char *argv[]);
-int test_mme_mtk_vs_get_status_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_status_req(hpav_chan_t *channel, int argc,
                                    char *argv[]);
-int test_mme_mtk_vs_get_tonemap_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_tonemap_req(hpav_chan_t *channel, int argc,
                                     char *argv[]);
-int test_mme_mtk_vs_set_capture_state_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_capture_state_req(hpav_chan_t *channel, int argc,
                                           char *argv[]);
-int test_mme_mtk_vs_get_snr_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_snr_req(hpav_chan_t *channel, int argc,
                                 char *argv[]);
-int test_mme_mtk_vs_spi_stats_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_spi_stats_req(hpav_chan_t *channel, int argc,
                                   char *argv[]);
-int test_mme_mtk_vs_get_link_stats_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_link_stats_req(hpav_chan_t *channel, int argc,
                                        char *argv[]);
-int test_mme_mtk_vs_get_nw_info_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_nw_info_req(hpav_chan_t *channel, int argc,
                                     char *argv[]);
-int test_mme_mtk_vs_set_nvram_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
                                   char *argv[]);
-int test_mme_mtk_vs_get_nvram_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_nvram_req(hpav_chan_t *channel, int argc,
                                   char *argv[]);
-int test_mme_mtk_vs_pwm_generation_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_pwm_generation_req(hpav_chan_t *channel, int argc,
                                        char *argv[]);
-int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_file_access_req(hpav_chan_t *channel, int argc,
                                     char *argv[]);
 #define MTK_VS_FILE_ACCESS_REQ_PARAMETER_FAIL -1
 #define MTK_VS_FILE_ACCESS_REQ_FAIL -2
-int test_mme_mtk_vs_get_pwm_stats_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_pwm_stats_req(hpav_chan_t *channel, int argc,
                                       char *argv[]);
 #define MTK_VS_GET_PWM_STATS_REQ_PARAMETER_FAIL -1
 #define MTK_VS_GET_PWM_STATS_REQ_FAIL -2
-int test_mme_mtk_vs_get_pwm_conf_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_pwm_conf_req(hpav_chan_t *channel, int argc,
                                      char *argv[]);
 #define MTK_VS_GET_PWM_CONF_REQ_PARAMETER_FAIL -1
 #define MTK_VS_GET_PWM_CONF_REQ_FAIL -2
-int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_pwm_conf_req(hpav_chan_t *channel, int argc,
                                      char *argv[]);
 #define MTK_VS_SET_PWM_CONF_REQ_PARAMETER_FAIL -1
 #define MTK_VS_SET_PWM_CONF_REQ_FAIL -2
-int test_mme_mtk_vs_set_tx_cali_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_tx_cali_req(hpav_chan_t *channel, int argc,
                                     char *argv[]);
-int test_mme_mtk_vs_set_tx_cali_ind(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_tx_cali_ind(hpav_chan_t *channel, int argc,
                                     char *argv[]);
-int test_mme_vc_vs_set_sniffer_conf_req(int interface_num_to_open, int argc,
+int test_mme_vc_vs_set_sniffer_conf_req(hpav_chan_t *channel, int argc,
                                     char* argv[]);
-int test_mme_vc_vs_set_remote_access_req(int interface_num_to_open, int argc,
+int test_mme_vc_vs_set_remote_access_req(hpav_chan_t *channel, int argc,
                                     char* argv[]);
-int test_mme_vc_vs_get_remote_access_req(int interface_num_to_open, int argc,
+int test_mme_vc_vs_get_remote_access_req(hpav_chan_t *channel, int argc,
                                     char* argv[]);
 #if !defined(_WIN32)
 #include <sys/types.h>

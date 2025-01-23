@@ -66,8 +66,12 @@ void dump_cm_set_key_cnf(struct hpav_cm_set_key_cnf *response) {
     }
 }
 
-int test_mme_cm_set_key_req(int interface_num_to_open, int argc, char *argv[]) {
-    struct hpav_if *interfaces = NULL;
+int test_mme_cm_set_key_req(hpav_chan_t *channel, int argc, char *argv[]) {
+    struct hpav_cm_set_key_req mme_sent;
+    struct hpav_cm_set_key_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     struct hpav_error *error_stack = NULL;
     unsigned int key_type;
     unsigned int my_nonce;
@@ -101,6 +105,14 @@ int test_mme_cm_set_key_req(int interface_num_to_open, int argc, char *argv[]) {
         printf("device_password : if present DAK encrypt the MME \n");
         return EXIT_USAGE;
     }
+
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
     key_type = atoi(argv[1]);
     sscanf(argv[2], "%u", &my_nonce);
     sscanf(argv[3], "%u", &your_nonce);
@@ -112,103 +124,42 @@ int test_mme_cm_set_key_req(int interface_num_to_open, int argc, char *argv[]) {
     new_eks = atoi(argv[9]);
     hpav_stomd5sum(argv[10], new_key);
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Parameters
+    mme_sent.key_type = key_type;
+    mme_sent.my_nonce = my_nonce;
+    mme_sent.your_nonce = your_nonce;
+    mme_sent.pid = pid;
+    mme_sent.prn = prn;
+    mme_sent.pmn = pmn;
+    mme_sent.cco_cap = cco_cap;
+    memcpy(mme_sent.nid, nid, HPAV_NID_SIZE);
+    mme_sent.new_eks = new_eks;
+    memcpy(mme_sent.new_key, new_key, HPAV_MD5SUM_SIZE);
+    // Sending MME on the channel
+    if (argc >= 12) {
+        printf("Sending encrypted CM_SET_KEY.REQ "
+               "(CM_ENCRYPTED_PAYLOAD.IND) on the channel\n");
+        rv = hpav_cm_set_key_encrypted_sndrcv(channel, dest_mac, &mme_sent,
+                                              &response, 1000, 1, argv[11],
+                                              &error_stack);
+    } else {
+        printf("Sending CM_SET_KEY.REQ on the channel\n");
+        rv = hpav_cm_set_key_sndrcv(channel, dest_mac, &mme_sent, &response,
+                                    1000, 1, &error_stack);
+    }
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_cm_set_key_req mme_sent;
-                struct hpav_cm_set_key_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                mme_sent.key_type = key_type;
-                mme_sent.my_nonce = my_nonce;
-                mme_sent.your_nonce = your_nonce;
-                mme_sent.pid = pid;
-                mme_sent.prn = prn;
-                mme_sent.pmn = pmn;
-                mme_sent.cco_cap = cco_cap;
-                memcpy(mme_sent.nid, nid, HPAV_NID_SIZE);
-                mme_sent.new_eks = new_eks;
-                memcpy(mme_sent.new_key, new_key, HPAV_MD5SUM_SIZE);
-                // Sending MME on the channel
-                if (argc >= 12) {
-                    printf("Sending encrypted CM_SET_KEY.REQ "
-                           "(CM_ENCRYPTED_PAYLOAD.IND) on the channel\n");
-                    result = hpav_cm_set_key_encrypted_sndrcv(
-                        current_chan, dest_mac, &mme_sent, &response, 1000, 1,
-                        argv[11], &error_stack);
-                } else {
-                    printf("Sending CM_SET_KEY.REQ on the channel\n");
-                    result = hpav_cm_set_key_sndrcv(current_chan, dest_mac,
-                                                    &mme_sent, &response, 1000,
-                                                    1, &error_stack);
-                }
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_cm_set_key_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_cm_set_key_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_cm_set_key_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_cm_set_key_cnf(response);
     return rv;
 }
 
@@ -233,9 +184,14 @@ void dump_cm_amp_map_cnf(struct hpav_cm_amp_map_cnf *response) {
     }
 }
 
-int test_mme_cm_amp_map_req(int interface_num_to_open, int argc, char *argv[]) {
-    struct hpav_if *interfaces = NULL;
+int test_mme_cm_amp_map_req(hpav_chan_t *channel, int argc, char *argv[]) {
     struct hpav_error *error_stack = NULL;
+    struct hpav_cm_amp_map_req mme_sent;
+    struct hpav_cm_amp_map_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    int map_ktr = 0;
     int amlen = 0;
     FILE *fp;
     int data_count;
@@ -250,6 +206,13 @@ int test_mme_cm_amp_map_req(int interface_num_to_open, int argc, char *argv[]) {
         printf("AMLEN : Number of amplitude map data entries\n");
         printf("AMDATA : Amplitude Map Data (.txt file input)\n");
         return EXIT_USAGE;
+    }
+
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
     }
 
     // parser parameters to am_data array
@@ -277,94 +240,31 @@ int test_mme_cm_amp_map_req(int interface_num_to_open, int argc, char *argv[]) {
     }
     fclose(fp);
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Sending MME on the channel
+    printf("Sending CM_AMP_MAP.REQ on the channel\n");
+
+    mme_sent.map_length = amlen;
+
+    for (map_ktr = 0; map_ktr < (mme_sent.map_length / 2 +
+                                 mme_sent.map_length % 2);
+         map_ktr++)
+        mme_sent.map_data[map_ktr] =
+            am_data[map_ktr * 2] + (am_data[map_ktr * 2 + 1] << 4);
+
+    rv = hpav_cm_amp_map_sndrcv(channel, dest_mac, &mme_sent,
+                                &response, 1000, 1, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_cm_amp_map_req mme_sent;
-                struct hpav_cm_amp_map_cnf *response;
-                int map_ktr = 0;
-
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending CM_AMP_MAP.REQ on the channel\n");
-
-                mme_sent.map_length = amlen;
-
-                for (map_ktr = 0; map_ktr < (mme_sent.map_length / 2 +
-                                             mme_sent.map_length % 2);
-                     map_ktr++)
-                    mme_sent.map_data[map_ktr] =
-                        am_data[map_ktr * 2] + (am_data[map_ktr * 2 + 1] << 4);
-
-                result =
-                    hpav_cm_amp_map_sndrcv(current_chan, dest_mac, &mme_sent,
-                                           &response, 1000, 1, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_cm_amp_map_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_cm_amp_map_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_cm_amp_map_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_cm_amp_map_cnf(response);
     return rv;
 }

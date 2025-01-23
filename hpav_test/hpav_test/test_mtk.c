@@ -79,9 +79,8 @@ void dump_mtk_vs_set_nvram_cnf(struct hpav_mtk_vs_set_nvram_cnf *response) {
         response = response->next;
     }
 }
-int test_mme_mtk_vs_set_nvram_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
                                   char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
     unsigned int block_index;
     unsigned char block_data[MTK_NVRAM_BLOCK_SIZE];
@@ -89,6 +88,11 @@ int test_mme_mtk_vs_set_nvram_req(int interface_num_to_open, int argc,
     unsigned short nvram_size = MTK_NVRAM_BLOCK_SIZE;
     long nvram_read_size = 0;
     unsigned int nvram_block_size_max = 0;
+    struct hpav_mtk_vs_set_nvram_req mme_sent;
+    struct hpav_mtk_vs_set_nvram_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
     if (argc < 3) {
@@ -147,96 +151,43 @@ int test_mme_mtk_vs_set_nvram_req(int interface_num_to_open, int argc,
     fclose(nvram);
     nvram = NULL;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
-        hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // Parameters
+    mme_sent.block_index = block_index;
+    mme_sent.nvram_size = nvram_size;
+    if (xorchecksum(&block_data, nvram_read_size,
+                    &mme_sent.checksum) == -1) {
+        printf("Calculate checksum error!\n");
         return -1;
     }
+    // handle Endian problem
+    mme_sent.checksum = htonl(mme_sent.checksum);
 
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_set_nvram_req mme_sent;
-                struct hpav_mtk_vs_set_nvram_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                mme_sent.block_index = block_index;
-                mme_sent.nvram_size = nvram_size;
-                if (xorchecksum(&block_data, nvram_read_size,
-                                &mme_sent.checksum) == -1) {
-                    printf("Calculate checksum error!\n");
-                    return -1;
-                }
-                // handle Endian problem
-                mme_sent.checksum = htonl(mme_sent.checksum);
-
-                memcpy(mme_sent.data, block_data, nvram_read_size);
-                // Sending MME on the channel
-                printf("Sending Mstar VS_SET_NVRAM.REQ on the channel\n");
-                result = hpav_mtk_vs_set_nvram_sndrcv(current_chan, dest_mac,
-                                                      &mme_sent, &response,
-                                                      1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_set_nvram_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_set_nvram_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+    memcpy(mme_sent.data, block_data, nvram_read_size);
+    // Sending MME on the channel
+    printf("Sending Mstar VS_SET_NVRAM.REQ on the channel\n");
+    rv = hpav_mtk_vs_set_nvram_sndrcv(channel, dest_mac,
+                                      &mme_sent, &response,
+                                      1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
+        hpav_dump_error_stack(error_stack);
+        hpav_free_error_stack(&error_stack);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_set_nvram_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_set_nvram_cnf(response);
     return rv;
 }
 
@@ -281,90 +232,41 @@ void dump_mtk_vs_get_version_cnf(struct hpav_mtk_vs_get_version_cnf *response) {
         response = response->next;
     }
 }
-int test_mme_mtk_vs_get_version_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_version_req(hpav_chan_t *channel, int argc,
                                     char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_version_req mme_sent;
+    struct hpav_mtk_vs_get_version_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_VERSION.REQ on the channel\n");
+    rv = hpav_mtk_vs_get_version_sndrcv(channel, dest_mac,
+                                        &mme_sent, &response,
+                                        1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_version_req mme_sent;
-                struct hpav_mtk_vs_get_version_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_VERSION.REQ on the channel\n");
-                result = hpav_mtk_vs_get_version_sndrcv(current_chan, dest_mac,
-                                                        &mme_sent, &response,
-                                                        1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_version_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_version_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_get_version_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_get_version_cnf(response);
     return rv;
 }
 
@@ -388,170 +290,69 @@ void dump_mtk_vs_reset_cnf(struct hpav_mtk_vs_reset_cnf *response) {
         response = response->next;
     }
 }
-int test_mme_mtk_vs_reset_req(int interface_num_to_open, int argc,
-                              char *argv[]) {
-    struct hpav_if *interfaces = NULL;
+int test_mme_mtk_vs_reset_req(hpav_chan_t *channel, int argc, char *argv[]) {
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_reset_req mme_sent;
+    struct hpav_mtk_vs_reset_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+    // Sending MME on the channel
+    printf("Sending Mstar VS_RESET.REQ on the channel\n");
+    rv = hpav_mtk_vs_reset_sndrcv(channel, dest_mac, &mme_sent,
+                                  &response, 1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_reset_req mme_sent;
-                struct hpav_mtk_vs_reset_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending Mstar VS_RESET.REQ on the channel\n");
-                result =
-                    hpav_mtk_vs_reset_sndrcv(current_chan, dest_mac, &mme_sent,
-                                             &response, 1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_reset_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_reset_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_reset_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_reset_cnf(response);
     return rv;
 }
-int test_mme_mtk_vs_reset_ind(int interface_num_to_open, int argc,
-                              char *argv[]) {
-    struct hpav_if *interfaces = NULL;
+int test_mme_mtk_vs_reset_ind(hpav_chan_t *channel, int argc, char *argv[]) {
+
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_reset_ind mme_sent;
+    struct hpav_mtk_vs_reset_rsp *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_RESET.IND on the channel\n");
+    rv = hpav_mtk_vs_reset_ind_sndrcv(channel, dest_mac,
+                                      &mme_sent, &response,
+                                      1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
+        rv = EXIT_FAILURE;
     }
 
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_reset_ind mme_sent;
-                struct hpav_mtk_vs_reset_rsp *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending Mstar VS_RESET.IND on the channel\n");
-                result = hpav_mtk_vs_reset_ind_sndrcv(current_chan, dest_mac,
-                                                      &mme_sent, &response,
-                                                      1000, 0, &error_stack);
-
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                }
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
-    } else {
-        printf("No interface available\n");
-    }
     return rv;
 }
 
@@ -593,10 +394,14 @@ void dump_mtk_vs_get_nvram_cnf(struct hpav_mtk_vs_get_nvram_cnf *response) {
         response = response->next;
     }
 }
-int test_mme_mtk_vs_get_nvram_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_nvram_req(hpav_chan_t *channel, int argc,
                                   char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_nvram_req mme_sent;
+    struct hpav_mtk_vs_get_nvram_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
     // Parameters
@@ -607,89 +412,36 @@ int test_mme_mtk_vs_get_nvram_req(int interface_num_to_open, int argc,
         return EXIT_USAGE;
     }
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // REQ parameters (block_index)
+    mme_sent.index = (unsigned char)atoi(argv[1]);
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_NVRAM.REQ on the channel for "
+           "block index %d\n",
+           mme_sent.index);
+    rv = hpav_mtk_vs_get_nvram_sndrcv(channel, dest_mac,
+                                      &mme_sent, &response,
+                                      1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_nvram_req mme_sent;
-                struct hpav_mtk_vs_get_nvram_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // REQ parameters (block_index)
-                mme_sent.index = (unsigned char)atoi(argv[1]);
-
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_NVRAM.REQ on the channel for "
-                       "block index %d\n",
-                       mme_sent.index);
-                result = hpav_mtk_vs_get_nvram_sndrcv(current_chan, dest_mac,
-                                                      &mme_sent, &response,
-                                                      1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_nvram_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_nvram_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_get_nvram_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_get_nvram_cnf(response);
     return rv;
 }
 
@@ -718,99 +470,52 @@ void dump_mtk_vs_get_tonemask_cnf(
         response = response->next;
     }
 }
-int test_mme_mtk_vs_get_tonemask_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_tonemask_req(hpav_chan_t *channel, int argc,
                                      char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_tonemask_req mme_sent;
+    struct hpav_mtk_vs_get_tonemask_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
-        hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
-        return -1;
-    }
     // Parameters
     if (argc < 1) {
         printf("Mandatory parameter : sta_mac_address \n");
         printf("sta_mac_address : MAC address of the destination STA\n");
         return EXIT_USAGE;
     }
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_tonemask_req mme_sent;
-                struct hpav_mtk_vs_get_tonemask_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-                // Parameters
-                if (!hpav_stomac(argv[1], mme_sent.peer_mac_addr)) {
-                    printf("An error occured. Input mac value is in valid format...\n");
-                    return EXIT_USAGE;
-                }
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_TONEMASK.REQ on the channel\n");
-                result = hpav_mtk_vs_get_tonemask_sndrcv(current_chan, dest_mac,
-                                                         &mme_sent, &response,
-                                                         1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_tonemask_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_tonemask_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
         }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
-    } else {
-        printf("No interface available\n");
     }
+    // Parameters
+    if (!hpav_stomac(argv[1], mme_sent.peer_mac_addr)) {
+        printf("An error occurred. Input mac value is in valid format...\n");
+        return EXIT_USAGE;
+    }
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_TONEMASK.REQ on the channel\n");
+    rv = hpav_mtk_vs_get_tonemask_sndrcv(channel, dest_mac,
+                                         &mme_sent, &response,
+                                         1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
+        hpav_dump_error_stack(error_stack);
+        hpav_free_error_stack(&error_stack);
+        rv = EXIT_FAILURE;
+    } else {
+        // Dump response
+        dump_mtk_vs_get_tonemask_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
+    }
+    // Free response
+    hpav_free_mtk_vs_get_tonemask_cnf(response);
     return rv;
 }
 
@@ -842,90 +547,41 @@ void dump_mtk_vs_get_eth_phy_cnf(struct hpav_mtk_vs_get_eth_phy_cnf *response) {
         response = response->next;
     }
 }
-int test_mme_mtk_vs_get_eth_phy_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_eth_phy_req(hpav_chan_t *channel, int argc,
                                     char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_eth_phy_req mme_sent;
+    struct hpav_mtk_vs_get_eth_phy_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_ETH_PHY.REQ on the channel\n");
+    rv = hpav_mtk_vs_get_eth_phy_sndrcv(channel, dest_mac,
+                                            &mme_sent, &response,
+                                            1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_eth_phy_req mme_sent;
-                struct hpav_mtk_vs_get_eth_phy_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_ETH_PHY.REQ on the channel\n");
-                result = hpav_mtk_vs_get_eth_phy_sndrcv(current_chan, dest_mac,
-                                                        &mme_sent, &response,
-                                                        1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_eth_phy_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_eth_phy_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_get_eth_phy_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_get_eth_phy_cnf(response);
     return rv;
 }
 
@@ -983,13 +639,17 @@ void dump_mtk_vs_eth_stats_cnf(struct hpav_mtk_vs_eth_stats_cnf *response) {
         response = response->next;
     }
 }
-int test_mme_mtk_vs_eth_stats_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_eth_stats_req(hpav_chan_t *channel, int argc,
                                   char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_eth_stats_req mme_sent;
+    struct hpav_mtk_vs_eth_stats_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
-
     int command;
+
     // Parameters
     if (argc < 2) {
         printf("Mandatory parameters : sta_mac_address command\n");
@@ -997,88 +657,34 @@ int test_mme_mtk_vs_eth_stats_req(int interface_num_to_open, int argc,
         printf("command : 0 to get stats, 1 to reset\n");
         return EXIT_USAGE;
     }
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
     command = atoi(argv[1]);
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Parameters
+    mme_sent.command = command;
+    // Sending MME on the channel
+    printf("Sending Mstar VS_ETH_STATS.REQ on the channel\n");
+    rv = hpav_mtk_vs_eth_stats_sndrcv(channel, dest_mac,
+                                      &mme_sent, &response,
+                                      1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_eth_stats_req mme_sent;
-                struct hpav_mtk_vs_eth_stats_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                mme_sent.command = command;
-                // Sending MME on the channel
-                printf("Sending Mstar VS_ETH_STATS.REQ on the channel\n");
-                result = hpav_mtk_vs_eth_stats_sndrcv(current_chan, dest_mac,
-                                                      &mme_sent, &response,
-                                                      1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_eth_stats_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_eth_stats_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_eth_stats_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_eth_stats_cnf(response);
     return rv;
 }
 
@@ -1128,90 +734,42 @@ void dump_mtk_vs_get_status_cnf(struct hpav_mtk_vs_get_status_cnf *response) {
         response = response->next;
     }
 }
-int test_mme_mtk_vs_get_status_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_status_req(hpav_chan_t *channel, int argc,
                                    char *argv[]) {
-    struct hpav_if *interfaces = NULL;
+
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_status_req mme_sent;
+    struct hpav_mtk_vs_get_status_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_STATUS.REQ on the channel\n");
+    rv = hpav_mtk_vs_get_status_sndrcv(channel, dest_mac,
+                                       &mme_sent, &response,
+                                       1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_status_req mme_sent;
-                struct hpav_mtk_vs_get_status_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_STATUS.REQ on the channel\n");
-                result = hpav_mtk_vs_get_status_sndrcv(current_chan, dest_mac,
-                                                       &mme_sent, &response,
-                                                       1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_status_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_status_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_get_status_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_get_status_cnf(response);
     return rv;
 }
 
@@ -1309,10 +867,14 @@ void dump_mtk_vs_get_tonemap_cnf(struct hpav_mtk_vs_get_tonemap_cnf *response,
     }
 }
 
-int test_mme_mtk_vs_get_tonemap_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_tonemap_req(hpav_chan_t *channel, int argc,
                                     char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_tonemap_req mme_sent;
+    struct hpav_mtk_vs_get_tonemap_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     unsigned char remote_sta_mac_addr[ETH_MAC_ADDRESS_SIZE];
     unsigned int tmi;
     unsigned int int_id;
@@ -1335,100 +897,46 @@ int test_mme_mtk_vs_get_tonemap_req(int interface_num_to_open, int argc,
         return EXIT_USAGE;
     }
     if (!hpav_stomac(argv[1], remote_sta_mac_addr)) {
-        printf("An error occured. Input mac value is in valid format...\n");
+        printf("An error occurred. Input mac value is in valid format...\n");
         return EXIT_USAGE;
+    }
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
     }
     tmi = atoi(argv[2]);
     int_id = atoi(argv[3]);
     direction = atoi(argv[4]);
     carrier_group = atoi(argv[5]);
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Parameters
+    memcpy(mme_sent.remote_sta_addr, remote_sta_mac_addr,
+           ETH_MAC_ADDRESS_SIZE);
+    mme_sent.tmi = tmi;
+    mme_sent.int_id = int_id;
+    mme_sent.direction = direction;
+    mme_sent.carrier_group = carrier_group;
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_TONEMAP.REQ on the channel\n");
+    rv = hpav_mtk_vs_get_tonemap_sndrcv(channel, dest_mac,
+                                        &mme_sent, &response,
+                                        2000, 1, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_tonemap_req mme_sent;
-                struct hpav_mtk_vs_get_tonemap_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                memcpy(mme_sent.remote_sta_addr, remote_sta_mac_addr,
-                       ETH_MAC_ADDRESS_SIZE);
-                mme_sent.tmi = tmi;
-                mme_sent.int_id = int_id;
-                mme_sent.direction = direction;
-                mme_sent.carrier_group = carrier_group;
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_TONEMAP.REQ on the channel\n");
-                result = hpav_mtk_vs_get_tonemap_sndrcv(current_chan, dest_mac,
-                                                        &mme_sent, &response,
-                                                        2000, 1, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_tonemap_cnf(
-                        response, (carrier_group == 0xff) ? 1 : 0);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_tonemap_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_get_tonemap_cnf(
+            response, (carrier_group == 0xff) ? 1 : 0);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_get_tonemap_cnf(response);
     return rv;
 }
 
@@ -1453,10 +961,14 @@ void dump_mtk_vs_set_capture_state_cnf(
         response = response->next;
     }
 }
-int test_mme_mtk_vs_set_capture_state_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_capture_state_req(hpav_chan_t *channel, int argc,
                                           char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_set_capture_state_req mme_sent;
+    struct hpav_mtk_vs_set_capture_state_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     unsigned char remote_sta_mac_addr[ETH_MAC_ADDRESS_SIZE];
     unsigned char state;
     unsigned char captured;
@@ -1475,99 +987,44 @@ int test_mme_mtk_vs_set_capture_state_req(int interface_num_to_open, int argc,
             "captured_source : choose to capture what kinds of data source\n");
         return EXIT_USAGE;
     }
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
     if (!hpav_stomac(argv[1], remote_sta_mac_addr)) {
-        printf("An error occured. Input mac value is in valid format...\n");
+        printf("An error occurred. Input mac value is in valid format...\n");
         return EXIT_USAGE;
     }
     state = atoi(argv[2]);
     captured = atoi(argv[3]);
     captured_source = atoi(argv[4]);
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Parameters
+    memcpy(mme_sent.remote_sta_addr, remote_sta_mac_addr,
+           ETH_MAC_ADDRESS_SIZE);
+    mme_sent.state = state;
+    mme_sent.captured = captured;
+    mme_sent.captured_source = captured_source;
+    // Sending MME on the channel
+    printf("Sending Mstar VS_SET_CAPTURE_STATE.REQ on the channel\n");
+    rv = hpav_mtk_vs_set_capture_state_sndrcv(channel, dest_mac,
+                                              &mme_sent, &response,
+                                              1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_set_capture_state_req mme_sent;
-                struct hpav_mtk_vs_set_capture_state_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                memcpy(mme_sent.remote_sta_addr, remote_sta_mac_addr,
-                       ETH_MAC_ADDRESS_SIZE);
-                mme_sent.state = state;
-                mme_sent.captured = captured;
-                mme_sent.captured_source = captured_source;
-                // Sending MME on the channel
-                printf(
-                    "Sending Mstar VS_SET_CAPTURE_STATE.REQ on the channel\n");
-                result = hpav_mtk_vs_set_capture_state_sndrcv(
-                    current_chan, dest_mac, &mme_sent, &response, 1000, 0,
-                    &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_set_capture_state_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_set_capture_state_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_set_capture_state_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_set_capture_state_cnf(response);
     return rv;
 }
 
@@ -1624,10 +1081,14 @@ void dump_mtk_vs_get_snr_cnf(struct hpav_mtk_vs_get_snr_cnf *response) {
         response = response->next;
     }
 }
-int test_mme_mtk_vs_get_snr_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_snr_req(hpav_chan_t *channel, int argc,
                                 char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_snr_req mme_sent;
+    struct hpav_mtk_vs_get_snr_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     unsigned char remote_sta_mac_addr[ETH_MAC_ADDRESS_SIZE];
     unsigned int int_index;
     unsigned int carrier_group;
@@ -1644,96 +1105,42 @@ int test_mme_mtk_vs_get_snr_req(int interface_num_to_open, int argc,
         printf("carrier_group : modulo-4 subcarrier group number\n");
         return EXIT_USAGE;
     }
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
     if (!hpav_stomac(argv[1], remote_sta_mac_addr)) {
-        printf("An error occured. Input mac value is in valid format...\n");
+        printf("An error occurred. Input mac value is in valid format...\n");
         return EXIT_USAGE;
     }
     int_index = atoi(argv[2]);
     carrier_group = atoi(argv[3]);
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Parameters
+    memcpy(mme_sent.remote_sta_addr, remote_sta_mac_addr,
+           ETH_MAC_ADDRESS_SIZE);
+    mme_sent.int_index = int_index;
+    mme_sent.carrier_group = carrier_group;
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_SNR.REQ on the channel\n");
+    rv = hpav_mtk_vs_get_snr_sndrcv(channel, dest_mac,
+                                        &mme_sent, &response, 1000,
+                                        0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_snr_req mme_sent;
-                struct hpav_mtk_vs_get_snr_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                memcpy(mme_sent.remote_sta_addr, remote_sta_mac_addr,
-                       ETH_MAC_ADDRESS_SIZE);
-                mme_sent.int_index = int_index;
-                mme_sent.carrier_group = carrier_group;
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_SNR.REQ on the channel\n");
-                result = hpav_mtk_vs_get_snr_sndrcv(current_chan, dest_mac,
-                                                    &mme_sent, &response, 1000,
-                                                    0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_snr_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_snr_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_get_snr_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_get_snr_cnf(response);
     return rv;
 }
 
@@ -1811,10 +1218,14 @@ void dump_mtk_vs_get_link_stats_cnf(
         response = response->next;
     }
 }
-int test_mme_mtk_vs_get_link_stats_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_link_stats_req(hpav_chan_t *channel, int argc,
                                        char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_link_stats_req mme_sent;
+    struct hpav_mtk_vs_get_link_stats_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     unsigned int req_type;
     unsigned int req_id;
     unsigned int lid;
@@ -1836,102 +1247,48 @@ int test_mme_mtk_vs_get_link_stats_req(int interface_num_to_open, int argc,
         printf("des_src_mac_address : destination/source MAC address\n");
         return EXIT_USAGE;
     }
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
     req_type = atoi(argv[1]);
     req_id = atoi(argv[2]);
     lid = atoi(argv[3]);
     tl_flag = atoi(argv[4]);
     mgmt_flag = atoi(argv[5]);
     if (!hpav_stomac(argv[6], des_src_mac_address)) {
-        printf("An error occured. Input mac value is in valid format...\n");
+        printf("An error occurred. Input mac value is in valid format...\n");
         return EXIT_USAGE;
     }
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Parameters
+    mme_sent.req_type = req_type;
+    mme_sent.req_id = req_id;
+    mme_sent.lid = lid;
+    mme_sent.tl_flag = tl_flag;
+    mme_sent.mgmt_flag = mgmt_flag;
+    memcpy(mme_sent.des_src_mac_addr, des_src_mac_address,
+           ETH_MAC_ADDRESS_SIZE);
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_LINK_STATS.REQ on the channel\n");
+    rv = hpav_mtk_vs_get_link_stats_sndrcv(channel, dest_mac,
+                                           &mme_sent, &response,
+                                           1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_link_stats_req mme_sent;
-                struct hpav_mtk_vs_get_link_stats_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                mme_sent.req_type = req_type;
-                mme_sent.req_id = req_id;
-                mme_sent.lid = lid;
-                mme_sent.tl_flag = tl_flag;
-                mme_sent.mgmt_flag = mgmt_flag;
-                memcpy(mme_sent.des_src_mac_addr, des_src_mac_address,
-                       ETH_MAC_ADDRESS_SIZE);
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_LINK_STATS.REQ on the channel\n");
-                result = hpav_mtk_vs_get_link_stats_sndrcv(
-                    current_chan, dest_mac, &mme_sent, &response, 1000, 0,
-                    &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_link_stats_cnf(response, req_type, tl_flag);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_link_stats_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_get_link_stats_cnf(response, req_type, tl_flag);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_get_link_stats_cnf(response);
     return rv;
 }
 
@@ -1985,73 +1342,31 @@ void dump_mtk_vs_get_nw_info_cnf(struct hpav_mtk_vs_get_nw_info_cnf *response) {
     }
 }
 
-int test_mme_mtk_vs_get_nw_info_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_nw_info_req(hpav_chan_t *channel, int argc,
                                     char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
-    struct hpav_chan *current_chan = NULL;
-    struct hpav_if *interface_to_open = NULL;
     struct hpav_mtk_vs_get_nw_info_req mme_sent;
-    struct hpav_mtk_vs_get_nw_info_cnf *response;
-    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {0xff, 0xff, 0xff,
-                                                    0xff, 0xff, 0xff};
-    unsigned int num_interfaces = 0;
+    struct hpav_mtk_vs_get_nw_info_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
-    int result = -1;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
-        hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (NULL == interfaces) {
-        printf("No interface available\n");
-        return -1;
-    }
-
-    // Get interface
-    interface_to_open =
-        hpav_get_interface_by_index(interfaces, interface_num_to_open);
-    if (NULL == interface_to_open) {
-        num_interfaces = hpav_get_number_of_interfaces(interfaces);
-        printf("Interface number %d not found (0-%d available)\n",
-               interface_num_to_open, (num_interfaces - 1));
-        hpav_free_interfaces(interfaces);
-        return EXIT_USAGE;
-    }
-
-    // Open the interface
-    printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-           interface_to_open->name, (interface_to_open->description != NULL
-                                         ? interface_to_open->description
-                                         : "no description"));
-    current_chan = hpav_open_channel(interface_to_open, &error_stack);
-    if (NULL == current_chan) {
-        printf("Error while opening the interface\n");
-        hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
-        hpav_free_interfaces(interfaces);
-        return -1;
-    }
-
-    // Sending MME on the channel
-    printf("Interface successfully opened\n");
-    printf("Sending Mstar VS_GET_NW_INFO.REQ on the channel\n");
     if (argc > 0) {
         if (!hpav_stomac(argv[0], dest_mac)) {
-            printf("An error occured. Input mac value is in valid format...\n");
+            printf("An error occurred. Input mac value is in valid format...\n");
             return EXIT_USAGE;
         }
     }
 
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_NW_INFO.REQ on the channel\n");
     memset(&mme_sent, 0x0, sizeof(struct hpav_mtk_vs_get_nw_info_req));
-    result = hpav_mtk_vs_get_nw_info_sndrcv(current_chan, dest_mac, &mme_sent,
-                                            &response, 1000, 0, &error_stack);
-    if (result != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    rv = hpav_mtk_vs_get_nw_info_sndrcv(channel, dest_mac,
+                                        &mme_sent, &response,
+                                        1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
         rv = EXIT_FAILURE;
@@ -2061,15 +1376,8 @@ int test_mme_mtk_vs_get_nw_info_req(int interface_num_to_open, int argc,
         if (response == NULL)
             rv = EXIT_NO_RESPONSE;
     }
-
     // Free response
     hpav_free_mtk_vs_get_nw_info_cnf(response);
-    // Close channel
-    hpav_close_channel(current_chan);
-    printf("Interface closed\n");
-    // Free list of interfaces
-    hpav_free_interfaces(interfaces);
-
     return rv;
 }
 
@@ -2126,90 +1434,41 @@ void dump_mtk_vs_get_pwm_stats_cnf(
         response = response->next;
     }
 }
-int test_mme_mtk_vs_get_pwm_stats_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_pwm_stats_req(hpav_chan_t *channel, int argc,
                                       char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_pwm_stats_req mme_sent;
+    struct hpav_mtk_vs_get_pwm_stats_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_PWM_STATS.REQ on the channel\n");
+    rv = hpav_mtk_vs_get_pwm_stats_sndrcv(channel, dest_mac,
+                                          &mme_sent, &response,
+                                          1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_pwm_stats_req mme_sent;
-                struct hpav_mtk_vs_get_pwm_stats_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_PWM_STATS.REQ on the channel\n");
-                result = hpav_mtk_vs_get_pwm_stats_sndrcv(
-                    current_chan, dest_mac, &mme_sent, &response, 1000, 0,
-                    &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_pwm_stats_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_pwm_stats_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_get_pwm_stats_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_get_pwm_stats_cnf(response);
     return rv;
 }
 
@@ -2258,90 +1517,41 @@ void dump_mtk_vs_get_pwm_conf_cnf(
     }
 }
 
-int test_mme_mtk_vs_get_pwm_conf_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_get_pwm_conf_req(hpav_chan_t *channel, int argc,
                                      char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_get_pwm_conf_req mme_sent;
+    struct hpav_mtk_vs_get_pwm_conf_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_GET_PWM_CONF.REQ on the channel\n");
+    rv = hpav_mtk_vs_get_pwm_conf_sndrcv(channel, dest_mac,
+                                         &mme_sent, &response,
+                                         1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_get_pwm_conf_req mme_sent;
-                struct hpav_mtk_vs_get_pwm_conf_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending Mstar VS_GET_PWM_CONF.REQ on the channel\n");
-                result = hpav_mtk_vs_get_pwm_conf_sndrcv(current_chan, dest_mac,
-                                                         &mme_sent, &response,
-                                                         1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_get_pwm_conf_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_get_pwm_conf_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_get_pwm_conf_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_get_pwm_conf_cnf(response);
     return rv;
 }
 
@@ -2374,19 +1584,22 @@ void dump_mtk_vs_set_pwm_conf_cnf(
 
 #define SET_PWM_CONF_PARAMETERS_NUM 10
 
-int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_pwm_conf_req(hpav_chan_t *channel, int argc,
                                      char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
-    int result = 0;
     struct hpav_mtk_vs_set_pwm_conf_req mme_sent;
+    struct hpav_mtk_vs_set_pwm_conf_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    int sndrcv_rv =-1;
     int rv = EXIT_SUCCESS;
 
     if (argc != SET_PWM_CONF_PARAMETERS_NUM) {
-        result = MTK_VS_SET_PWM_CONF_REQ_PARAMETER_FAIL;
+        rv = MTK_VS_SET_PWM_CONF_REQ_PARAMETER_FAIL;
     }
 
-    if (result == 0) {
+    if (rv == 0) {
         mme_sent.op = atoi(argv[1]);
         mme_sent.pwm_mode = atoi(argv[2]);
         mme_sent.pwm_measures = atoi(argv[3]);
@@ -2398,7 +1611,7 @@ int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
         mme_sent.pwm_voltage_bias = atoi(argv[9]);
     }
 
-    if (result != 0) {
+    if (rv != 0) {
         printf("mtk_vs_set_pwm_conf.req  num_interface [mac_address]\n"
                "Mandatory parameters: Peer_MAC OP_code PWM_mode PWM_measures "
                "PWM_measurement_period freq_thr dc_thr vol_thr\n"
@@ -2422,84 +1635,31 @@ int test_mme_mtk_vs_set_pwm_conf_req(int interface_num_to_open, int argc,
         return EXIT_USAGE;
     }
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_SET_PWM_CONF.REQ on the channel\n");
+    sndrcv_rv = hpav_mtk_vs_set_pwm_conf_sndrcv(channel, dest_mac,
+                                                &mme_sent, &response,
+                                                1000, 0, &error_stack);
+    if (sndrcv_rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return MTK_VS_SET_PWM_CONF_REQ_PARAMETER_FAIL;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int sndrcv_result = -1;
-                struct hpav_mtk_vs_set_pwm_conf_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending Mstar VS_SET_PWM_CONF.REQ on the channel\n");
-                sndrcv_result = hpav_mtk_vs_set_pwm_conf_sndrcv(
-                    current_chan, dest_mac, &mme_sent, &response, 1000, 0,
-                    &error_stack);
-                if (sndrcv_result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_set_pwm_conf_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_set_pwm_conf_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_set_pwm_conf_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
-
+    // Free response
+    hpav_free_mtk_vs_set_pwm_conf_cnf(response);
     return rv;
 }
 void dump_mtk_vs_set_tx_cali_cnf(struct hpav_mtk_vs_set_tx_cali_cnf *response) {
@@ -2580,105 +1740,60 @@ void dump_mtk_vs_spi_stats_cnf(struct hpav_mtk_vs_spi_stats_cnf *response) {
     }
 }
 
-int test_mme_mtk_vs_set_tx_cali_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_tx_cali_req(hpav_chan_t *channel, int argc,
                                     char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_set_tx_cali_req mme_sent;
+    struct hpav_mtk_vs_set_tx_cali_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
-        hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
-        return -1;
-    }
 	// Parameters
 	if (argc < 2) {
 		printf("Mandatory parameter : sta_mac_address enable\n");
 		printf("sta_mac_address : MAC address of the destination STA\n");
-		printf("enable : 0x00/Ox01 = Disable/Enable transmission PSD calibration featur\n");
+		printf("enable : 0x00/Ox01 = Disable/Enable transmission PSD calibration feature\n");
 		return EXIT_USAGE;
 	}
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_set_tx_cali_req mme_sent;
-                struct hpav_mtk_vs_set_tx_cali_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                mme_sent.enable = atoi(argv[1]);
-                // Sending MME on the channel
-                printf("Sending Mstar VS_SET_TX_CALI.REQ on the channel\n");
-                result = hpav_mtk_vs_set_tx_cali_sndrcv(current_chan, dest_mac,
-                                                        &mme_sent, &response,
-                                                        1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_set_tx_cali_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_set_tx_cali_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
         }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
-    } else {
-        printf("No interface available\n");
     }
+
+    mme_sent.enable = atoi(argv[1]);
+    // Sending MME on the channel
+    printf("Sending Mstar VS_SET_TX_CALI.REQ on the channel\n");
+    rv = hpav_mtk_vs_set_tx_cali_sndrcv(channel, dest_mac,
+                                        &mme_sent, &response,
+                                        1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
+        hpav_dump_error_stack(error_stack);
+        hpav_free_error_stack(&error_stack);
+        rv = EXIT_FAILURE;
+    } else {
+        // Dump response
+        dump_mtk_vs_set_tx_cali_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
+    }
+    // Free response
+    hpav_free_mtk_vs_set_tx_cali_cnf(response);
     return rv;
 }
 
-int test_mme_mtk_vs_spi_stats_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_spi_stats_req(hpav_chan_t *channel, int argc,
                                   char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_spi_stats_req mme_sent;
+    struct hpav_mtk_vs_spi_stats_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     unsigned int command;
     int rv = EXIT_SUCCESS;
 
@@ -2689,87 +1804,34 @@ int test_mme_mtk_vs_spi_stats_req(int interface_num_to_open, int argc,
         printf("command : 0 to get stats, 1 to reset stats\n");
         return EXIT_USAGE;
     }
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
     command = atoi(argv[1]);
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+
+    // Parameters
+    mme_sent.command = command;
+    // Sending MME on the channel
+    printf("Sending Mstar VS_SPI_STATS.REQ on the channel\n");
+    rv = hpav_mtk_vs_spi_stats_sndrcv(channel, dest_mac,
+                                      &mme_sent, &response,
+                                      1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_spi_stats_req mme_sent;
-                struct hpav_mtk_vs_spi_stats_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                mme_sent.command = command;
-                // Sending MME on the channel
-                printf("Sending Mstar VS_SPI_STATS.REQ on the channel\n");
-                result = hpav_mtk_vs_spi_stats_sndrcv(current_chan, dest_mac,
-                                                      &mme_sent, &response,
-                                                      1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_spi_stats_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_spi_stats_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_spi_stats_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_spi_stats_cnf(response);
     return rv;
 }
 
@@ -2805,80 +1867,30 @@ void dump_mtk_vs_set_tx_cali_ind(struct hpav_mtk_vs_set_tx_cali_ind *response) {
     }
 }
 
-int test_mme_mtk_vs_set_tx_cali_ind(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_set_tx_cali_ind(hpav_chan_t *channel, int argc,
                                     char *argv[]) {
-    struct hpav_if *interfaces = NULL;
+
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_set_tx_cali_ind *response = NULL;
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Sending MME on the channel
+    printf("Recving Mstar VS_SET_TX_CALI.IND on the channel\n");
+    rv = hpav_mtk_vs_set_tx_cali_ind_rcv(channel, &response,
+                                         1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-
-                struct hpav_mtk_vs_set_tx_cali_ind *response;
-                printf("Interface successfully opened\n");
-
-                // Sending MME on the channel
-                printf("Recving Mstar VS_SET_TX_CALI.IND on the channel\n");
-                result = hpav_mtk_vs_set_tx_cali_ind_rcv(
-                    current_chan, &response, 1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_set_tx_cali_ind(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_set_tx_cali_ind(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_set_tx_cali_ind(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_set_tx_cali_ind(response);
     return rv;
 }
 
@@ -2910,14 +1922,17 @@ void dump_vc_vs_set_sniffer_conf_cnf(struct hpav_vc_vs_set_sniffer_conf_cnf*
         response = response->next;
     }
 }
-int test_mme_vc_vs_set_sniffer_conf_req(int interface_num_to_open, int argc,
-    char *argv[]) {
-    struct hpav_if *interfaces = NULL;
+int test_mme_vc_vs_set_sniffer_conf_req(hpav_chan_t *channel, int argc,
+                                        char *argv[]) {
     struct hpav_error *error_stack = NULL;
+    struct hpav_vc_vs_set_sniffer_conf_req mme_sent;
+    struct hpav_vc_vs_set_sniffer_conf_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] =
+        { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
     int rv = EXIT_SUCCESS;
-    // Get list of interfaces from libhpav
-
     int sniffer_mode;
+
     // Parameters
     if (argc < 2) {
         printf("vc_vs_set_sniffer_conf_req  num_interface [mac_address]\n" \
@@ -2927,92 +1942,34 @@ int test_mme_vc_vs_set_sniffer_conf_req(int interface_num_to_open, int argc,
             "Ex: 00:11:22:33:44:55 1\n");
         return EXIT_USAGE;
     }
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
     sniffer_mode = atoi(argv[1]);
 
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Parameters
+    mme_sent.sniffer_mode = sniffer_mode;
+    // Sending MME on the channel
+    printf("Recving VC VS_SET_SNIFFER_CONF.REQ on the channel\n");
+    rv = hpav_vc_vs_set_sniffer_conf_sndrcv(channel, dest_mac,
+                                            &mme_sent, &response,
+                                            1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
+        rv = EXIT_FAILURE;
+    } else {
+        // Dump response
+        dump_vc_vs_set_sniffer_conf_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n",
-                interface_num_to_open,
-                interface_to_open->name,
-                (interface_to_open->description != NULL
-                    ? interface_to_open->description
-                    : "no description"));
-            current_chan = hpav_open_channel(interface_to_open,
-                &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-
-                struct hpav_vc_vs_set_sniffer_conf_req mme_sent;
-                struct hpav_vc_vs_set_sniffer_conf_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] =
-                    { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-                if (argc > 0) {
-                    hpav_stomac(argv[0], dest_mac);
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                mme_sent.sniffer_mode = sniffer_mode;
-                // Sending MME on the channel
-                printf("Recving VC VS_SET_SNIFFER_CONF.REQ\
-                    on the channel\n");
-                result = hpav_vc_vs_set_sniffer_conf_sndrcv(
-                    current_chan, dest_mac, &mme_sent, &response,
-                        1000, 0, &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                }
-                else {
-                    // Dump response
-                    dump_vc_vs_set_sniffer_conf_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_vc_vs_set_sniffer_conf_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            }
-            else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        }
-        else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
-    }
-    else {
-        printf("No interface available\n");
-    }
+    // Free response
+    hpav_free_vc_vs_set_sniffer_conf_cnf(response);
     return rv;
 }
 
@@ -3042,93 +1999,43 @@ void dump_vc_vs_get_remote_access_cnf(
         response = response->next;
     }
 }
-int test_mme_vc_vs_get_remote_access_req(int interface_num_to_open, int argc,
+int test_mme_vc_vs_get_remote_access_req(hpav_chan_t *channel, int argc,
                                       char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_vc_vs_get_remote_access_req mme_sent;
+    struct hpav_vc_vs_get_remote_access_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int rv = EXIT_SUCCESS;
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
+
+    // Sending MME on the channel
+    printf("Sending VC_VS_GET_REMOTE_ACCESS.REQ on the channel\n");
+    rv = hpav_vc_vs_get_remote_access_sndrcv(channel, dest_mac,
+                                             &mme_sent, &response,
+                                             1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_vc_vs_get_remote_access_req mme_sent;
-                struct hpav_vc_vs_get_remote_access_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Sending MME on the channel
-                printf("Sending VC_VS_GET_REMOTE_ACCESS.REQ on the channel\n");
-                result = hpav_vc_vs_get_remote_access_sndrcv(
-                    current_chan, dest_mac, &mme_sent, &response, 1000, 0,
-                    &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_vc_vs_get_remote_access_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_vc_vs_get_remote_access_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_vc_vs_get_remote_access_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_vc_vs_get_remote_access_cnf(response);
     return rv;
 }
-
 
 void dump_vc_vs_set_remote_access_cnf(
     struct hpav_vc_vs_set_remote_access_cnf *response) {
@@ -3157,12 +2064,15 @@ void dump_vc_vs_set_remote_access_cnf(
     }
 }
 
-int test_mme_vc_vs_set_remote_access_req(int interface_num_to_open, int argc,
+int test_mme_vc_vs_set_remote_access_req(hpav_chan_t *channel, int argc,
                                      char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
-    int remote_access_mode;
     struct hpav_vc_vs_set_remote_access_req mme_sent;
+    struct hpav_vc_vs_set_remote_access_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    int remote_access_mode;
     int rv = EXIT_SUCCESS;
 
     if (argc < 2) {
@@ -3173,89 +2083,34 @@ int test_mme_vc_vs_set_remote_access_req(int interface_num_to_open, int argc,
                " Ex: 00:11:22:33:44:55 1\n");
         return EXIT_USAGE;
     }
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
     remote_access_mode = atoi(argv[1]);
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Parameters
+    mme_sent.remote_access_mode = remote_access_mode;
+    // Sending MME on the channel
+    printf("Sending VC VS_SET_REMOTE_ACCESS_CONF.REQ on the channel\n");
+    rv = hpav_vc_vs_set_remote_access_sndrcv(channel, dest_mac,
+                                                    &mme_sent, &response,
+                                                    1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int sndrcv_result = -1;
-                struct hpav_vc_vs_set_remote_access_req mme_sent;
-                struct hpav_vc_vs_set_remote_access_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                mme_sent.remote_access_mode = remote_access_mode;
-                // Sending MME on the channel
-                printf("Sending VC VS_SET_REMOTE_ACCESS_CONF.REQ on the channel\n");
-                sndrcv_result = hpav_vc_vs_set_remote_access_sndrcv(
-                    current_chan, dest_mac, &mme_sent, &response, 1000, 0,
-                    &error_stack);
-                if (sndrcv_result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_vc_vs_set_remote_access_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_vc_vs_set_remote_access_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_vc_vs_set_remote_access_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
-
+    // Free response
+    hpav_free_vc_vs_set_remote_access_cnf(response);
     return rv;
 }
 
@@ -3280,10 +2135,14 @@ void dump_mtk_vs_pwm_generation_cnf(
         response = response->next;
     }
 }
-int test_mme_mtk_vs_pwm_generation_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_pwm_generation_req(hpav_chan_t *channel, int argc,
                                        char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
+    struct hpav_mtk_vs_pwm_generation_req mme_sent;
+    struct hpav_mtk_vs_pwm_generation_cnf *response = NULL;
+    // Broadcast by default
+    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     unsigned int pmw_mode;
     unsigned int pmw_freq;
     unsigned int pwm_duty_cycle;
@@ -3300,93 +2159,39 @@ int test_mme_mtk_vs_pwm_generation_req(int interface_num_to_open, int argc,
         printf("Ex: 00:11:22:33:44:55 1 10 50\n");
         return EXIT_USAGE;
     }
+    if (argc > 0) {
+        if (!hpav_stomac(argv[0], dest_mac)) {
+            printf("An error occurred. Input mac value is in valid format...\n");
+            return EXIT_USAGE;
+        }
+    }
     pmw_mode = atoi(argv[1]);
     pmw_freq = atoi(argv[2]);
     pwm_duty_cycle = atoi(argv[3]);
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        printf("An error occured. Dumping error stack...\n");
+    // Parameters
+    mme_sent.pwm_mode = pmw_mode;
+    mme_sent.pwm_freq = pmw_freq;
+    mme_sent.pwm_duty_cycle = pwm_duty_cycle;
+
+    // Sending MME on the channel
+    printf("Sending Mstar VS_PWM_GENERATION.REQ on the channel\n");
+    rv = hpav_mtk_vs_pwm_generation_sndrcv(channel, dest_mac,
+                                           &mme_sent, &response,
+                                           1000, 0, &error_stack);
+    if (rv != HPAV_OK) {
+        printf("An error occurred. Dumping error stack...\n");
         hpav_dump_error_stack(error_stack);
         hpav_free_error_stack(&error_stack);
-        return -1;
-    }
-
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
-
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            printf("Opening interface %d : %s (%s)\n", interface_num_to_open,
-                   interface_to_open->name,
-                   (interface_to_open->description != NULL
-                        ? interface_to_open->description
-                        : "no description"));
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
-            if (current_chan != NULL) {
-                int result = -1;
-                struct hpav_mtk_vs_pwm_generation_req mme_sent;
-                struct hpav_mtk_vs_pwm_generation_cnf *response;
-                // Broadcast by default
-                unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-                if (argc > 0) {
-                    if (!hpav_stomac(argv[0], dest_mac)) {
-                        printf("An error occured. Input mac value is in valid format...\n");
-                        return EXIT_USAGE;
-                    }
-                }
-
-                printf("Interface successfully opened\n");
-                // Parameters
-                mme_sent.pwm_mode = pmw_mode;
-                mme_sent.pwm_freq = pmw_freq;
-                mme_sent.pwm_duty_cycle = pwm_duty_cycle;
-
-                // Sending MME on the channel
-                printf("Sending Mstar VS_PWM_GENERATION.REQ on the channel\n");
-                result = hpav_mtk_vs_pwm_generation_sndrcv(
-                    current_chan, dest_mac, &mme_sent, &response, 1000, 0,
-                    &error_stack);
-                if (result != HPAV_OK) {
-                    printf("An error occured. Dumping error stack...\n");
-                    hpav_dump_error_stack(error_stack);
-                    hpav_free_error_stack(&error_stack);
-                    rv = EXIT_FAILURE;
-                } else {
-                    // Dump response
-                    dump_mtk_vs_pwm_generation_cnf(response);
-                    if (response == NULL)
-                        rv = EXIT_NO_RESPONSE;
-                }
-                // Free response
-                hpav_free_mtk_vs_pwm_generation_cnf(response);
-                // Close channel
-                hpav_close_channel(current_chan);
-                printf("Interface closed\n");
-            } else {
-                printf("Error while opening the interface\n");
-                hpav_dump_error_stack(error_stack);
-                hpav_free_error_stack(&error_stack);
-                rv = EXIT_FAILURE;
-            }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            printf("Interface number %d not found (0-%d available)\n",
-                   interface_num_to_open, (num_interfaces - 1));
-            rv = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
+        rv = EXIT_FAILURE;
     } else {
-        printf("No interface available\n");
+        // Dump response
+        dump_mtk_vs_pwm_generation_cnf(response);
+        if (response == NULL)
+            rv = EXIT_NO_RESPONSE;
     }
+    // Free response
+    hpav_free_mtk_vs_pwm_generation_cnf(response);
     return rv;
 }
 
@@ -3626,12 +2431,11 @@ static mtk_vs_file_access_command_t *parse_mtk_vs_file_access(int argc,
     return command;
 }
 
-int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
+int test_mme_mtk_vs_file_access_req(hpav_chan_t *channel, int argc,
                                     char *argv[]) {
-    struct hpav_if *interfaces = NULL;
     struct hpav_error *error_stack = NULL;
     struct hpav_mtk_vs_file_access_req mme_sent;
-    struct hpav_mtk_vs_file_access_cnf *response;
+    struct hpav_mtk_vs_file_access_cnf *response = NULL;
     // Broadcast by default
     unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {0xFF, 0xFF, 0xFF,
                                                     0xFF, 0xFF, 0xFF};
@@ -3640,7 +2444,7 @@ int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
     int shift_argc = 0;
     int i = 0;
     unsigned int retry_count = 0;
-    unsigned char mac_result = 0;
+    unsigned char mac_rv = 0;
     char mac_str[32];
     unsigned char mac_list[64][ETH_MAC_ADDRESS_SIZE];
     unsigned int sta_count = 0;
@@ -3650,29 +2454,29 @@ int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
     FILE *fp = NULL;
     unsigned int file_size = 0, remain_len, size;
     char *buf = NULL;
-    int result = 0;
+    int rv = 0;
 
     if (argc == 0) {
-        result = MTK_VS_FILE_ACCESS_REQ_PARAMETER_FAIL;
+        rv = MTK_VS_FILE_ACCESS_REQ_PARAMETER_FAIL;
     } else {
         /* Check if specific mac address */
         if (!hpav_stomac(argv[0], tmp_dest_mac)) {
-            printf("An error occured. Input mac value is in valid format...\n");
+            printf("An error occurred. Input mac value is in valid format...\n");
             return EXIT_USAGE;
         }
         for (i = 0; i < ETH_MAC_ADDRESS_SIZE; ++i)
-            mac_result |= tmp_dest_mac[i];
+            mac_rv |= tmp_dest_mac[i];
 
-        if (mac_result) {
+        if (mac_rv) {
             memcpy(dest_mac, tmp_dest_mac, ETH_MAC_ADDRESS_SIZE);
             ++shift_argc;
         }
     }
 
-    if (result == 0)
+    if (rv == 0)
         cmd = parse_mtk_vs_file_access(argc - shift_argc, &argv[shift_argc]);
 
-    if (result != 0 || cmd == NULL) {
+    if (rv != 0 || cmd == NULL) {
         test_mtk_printf(
             "mtk_vs_file_access_req  num_interface [mac_address]\n"
             "[bootloader input BOOTLOADER]\n"
@@ -3687,7 +2491,7 @@ int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
         fp = fopen(STA_LIST_FILE_NAME, "r");
         while (fp != NULL && fscanf(fp, "%s", mac_str) != EOF) {
             if (!hpav_stomac(mac_str, mac_list[sta_count])) {
-                printf("An error occured. Input mac value is in valid format...\n");
+                printf("An error occurred. Input mac value is in valid format...\n");
                 return EXIT_USAGE;
             }
             ++sta_count;
@@ -3699,198 +2503,139 @@ int test_mme_mtk_vs_file_access_req(int interface_num_to_open, int argc,
         sta_count = 1;
     }
 
-    // Get list of interfaces from libhpav
-    if (hpav_get_interfaces(&interfaces, &error_stack) != HPAV_OK) {
-        test_mtk_printf("An error occured. Dumping error stack...\n");
-        if (!silence)
-            hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
-        return MTK_VS_FILE_ACCESS_REQ_FAIL;
-    }
+    for (sta_idx = 0; sta_idx < sta_count; ++sta_idx) {
+        retry_count = 0;
+        memcpy(dest_mac, mac_list[sta_idx], ETH_MAC_ADDRESS_SIZE);
+        memset(&mme_sent, 0, sizeof(mme_sent));
+        mme_sent.op = cmd->op;
+        mme_sent.file_type = cmd->file_type;
+        if (strlen(cmd->parameter) >
+            HPAV_MTK_VS_FILE_ACCESS_PARAMETER_MAX_LEN) {
+            test_mtk_printf("The length of parameter of "
+                            "vs_file_acceess.req is too long\n");
+            return MTK_VS_FILE_ACCESS_REQ_PARAMETER_FAIL;
+        } else if (strlen(cmd->parameter) != 0)
+            strcpy(mme_sent.parameter, cmd->parameter);
 
-    if (interfaces != NULL) {
-        struct hpav_if *interface_to_open = NULL;
-        // Get interface
-        interface_to_open =
-            hpav_get_interface_by_index(interfaces, interface_num_to_open);
+        if (cmd->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_WRITE) {
+            fp = fopen(cmd->file_name, "rb");
+            if (fp == NULL) {
+                test_mtk_printf("Can't open the file - %s\n",
+                                cmd->file_name);
+                return MTK_VS_FILE_ACCESS_REQ_FAIL;
+            }
 
-        // Check if an interface with this number was found
-        if (interface_to_open != NULL) {
-            struct hpav_chan *current_chan = NULL;
-            // Open the interface
-            test_mtk_printf("Opening interface %d : %s (%s)\n",
-                            interface_num_to_open, interface_to_open->name,
-                            (interface_to_open->description != NULL
-                                 ? interface_to_open->description
-                                 : "no description"));
+            fseek(fp, 0, SEEK_END);
+            file_size = ftell(fp);
+            rewind(fp);
 
-            current_chan = hpav_open_channel(interface_to_open, &error_stack);
+            buf = (char *)malloc(file_size);
+            fread(buf, 1, file_size, fp);
+            fclose(fp);
 
-            if (current_chan != NULL) {
-                test_mtk_printf("Interface successfully opened\n");
-                for (sta_idx = 0; sta_idx < sta_count; ++sta_idx) {
-                    retry_count = 0;
-                    memcpy(dest_mac, mac_list[sta_idx], ETH_MAC_ADDRESS_SIZE);
-                    memset(&mme_sent, 0, sizeof(mme_sent));
-                    mme_sent.op = cmd->op;
-                    mme_sent.file_type = cmd->file_type;
-                    if (strlen(cmd->parameter) >
-                        HPAV_MTK_VS_FILE_ACCESS_PARAMETER_MAX_LEN) {
-                        test_mtk_printf("The length of parameter of "
-                                        "vs_file_acceess.req is too long\n");
-                        result = MTK_VS_FILE_ACCESS_REQ_PARAMETER_FAIL;
-                        return result;
-                    } else if (strlen(cmd->parameter) != 0)
-                        strcpy(mme_sent.parameter, cmd->parameter);
+            mme_sent.total_fragments =
+                (file_size +
+                 HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN - 1) /
+                (HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN);
+        }
 
-                    if (cmd->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_WRITE) {
-                        fp = fopen(cmd->file_name, "rb");
-                        if (fp == NULL) {
-                            test_mtk_printf("Can't open the file - %s\n",
-                                            cmd->file_name);
-                            result = MTK_VS_FILE_ACCESS_REQ_FAIL;
-                            return result;
-                        }
+        // Sending MME on the channel
+        test_mtk_printf("Sending MStar VS_FILE_ACCESS.REQ %s : "
+                        "%s on the channel\n",
+                        hpav_mactos(dest_mac, mac_str), cmd->name);
 
-                        fseek(fp, 0, SEEK_END);
-                        file_size = ftell(fp);
-                        rewind(fp);
+        do {
+            if (cmd->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_WRITE) {
+                remain_len =
+                    file_size -
+                    (HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN *
+                     mme_sent.fragment_number);
+                size =
+                    (remain_len >
+                     HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN)
+                        ? HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN
+                        : remain_len;
 
-                        buf = (char *)malloc(file_size);
-                        fread(buf, 1, file_size, fp);
-                        fclose(fp);
+                memcpy(
+                    mme_sent.data,
+                    buf +
+                        (HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN *
+                         (mme_sent.fragment_number)),
+                    size);
 
-                        mme_sent.total_fragments =
-                            (file_size +
-                             HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN - 1) /
-                            (HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN);
-                    }
+                mme_sent.length = size;
+                mme_sent.offset =
+                    HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN *
+                    (mme_sent.fragment_number);
 
-                    // Sending MME on the channel
-                    test_mtk_printf("Sending MStar VS_FILE_ACCESS.REQ %s : "
-                                    "%s on the channel\n",
-                                    hpav_mactos(dest_mac, mac_str), cmd->name);
-
-                    do {
-                        if (cmd->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_WRITE) {
-                            remain_len =
-                                file_size -
-                                (HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN *
-                                 mme_sent.fragment_number);
-                            size =
-                                (remain_len >
-                                 HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN)
-                                    ? HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN
-                                    : remain_len;
-
-                            memcpy(
-                                mme_sent.data,
-                                buf +
-                                    (HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN *
-                                     (mme_sent.fragment_number)),
-                                size);
-
-                            mme_sent.length = size;
-                            mme_sent.offset =
-                                HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN *
-                                (mme_sent.fragment_number);
-
-                            if (cmd->file_type !=
-                                HPAV_MTK_VS_FILE_ACCESS_REQ_FILE_TYPE_GENERAL_FILE) {
-                                xorchecksum(
-                                    buf +
-                                        (HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN *
-                                         (mme_sent.fragment_number)),
-                                    mme_sent.length, &mme_sent.checksum);
-                            }
-                        }
-                        result = hpav_mtk_vs_file_access_sndrcv(
-                            current_chan, dest_mac, &mme_sent, &response, 5000,
-                            0, &error_stack,
-                            cmd->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_SCAN_STA);
-                        if (result != HPAV_OK) {
-                            test_mtk_printf(
-                                "An error occured. Dumping error stack...\n");
-                            if (!silence)
-                                hpav_dump_error_stack(error_stack);
-                            hpav_free_error_stack(&error_stack);
-                            result = -1;
-                        }
-
-                        else if (response != NULL) {
-                            hpav_mtk_vs_file_access_cnf_mstatus_t cnf_result =
-                                process_mtk_vs_file_access_cnf(cmd, response);
-                            if (cnf_result ==
-                                HPAV_MTK_FILE_ACCESS_CNF_MSTATUS_FAIL) {
-                                test_mtk_printf("An error occured. Dumping "
-                                                "error stack...\n");
-                                if (!silence)
-                                    hpav_dump_error_stack(error_stack);
-                                hpav_free_error_stack(&error_stack);
-                                result = HPAV_NOK;
-                            }
-                            memcpy(dest_mac, response->sta_mac_addr,
-                                   ETH_MAC_ADDRESS_SIZE);
-                            mme_sent.total_fragments =
-                                response->total_fragments;
-                            mme_sent.fragment_number =
-                                response->fragment_number + 1;
-
-                            if (cmd->op ==
-                                    HPAV_MTK_VS_FILE_ACCESS_REQ_OP_WRITE ||
-                                response->op ==
-                                    HPAV_MTK_VS_FILE_ACCESS_REQ_OP_SAVE) {
-                                if (retry_count == 0 &&
-                                    response->fragment_number % 10 == 0)
-                                    test_mtk_printf("=");
-                            }
-                            retry_count = 0;
-                        } else {
-                            ++retry_count;
-                            if (retry_count >= 3) {
-                                test_mtk_printf(
-                                    "Timeout:maximum retry %d times\n",
-                                    retry_count);
-                                result = MTK_VS_FILE_ACCESS_REQ_FAIL;
-                                break;
-                            }
-                        }
-                    } while (
-                        result == HPAV_OK &&
-                        ((mme_sent.total_fragments == 0 && response == NULL) ||
-                         mme_sent.fragment_number < mme_sent.total_fragments));
-
-                    if (buf != NULL)
-                        free(buf);
-
-                    test_mtk_printf("\n");
+                if (cmd->file_type !=
+                    HPAV_MTK_VS_FILE_ACCESS_REQ_FILE_TYPE_GENERAL_FILE) {
+                    xorchecksum(
+                        buf +
+                            (HPAV_MTK_VS_FILE_ACCESS_REQ_DATA_MAX_LEN *
+                             (mme_sent.fragment_number)),
+                        mme_sent.length, &mme_sent.checksum);
                 }
-
-                // Free response
-                hpav_free_mtk_vs_file_access_cnf(response);
-
-                // Close channel
-                hpav_close_channel(current_chan);
-                test_mtk_printf("Interface closed\n");
-            } else {
-                test_mtk_printf("Error while opening the interface\n");
+            }
+            rv = hpav_mtk_vs_file_access_sndrcv(channel, dest_mac,
+                                                &mme_sent, &response,
+                                                5000, 0, &error_stack,
+                                                cmd->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_SCAN_STA);
+            if (rv != HPAV_OK) {
+                test_mtk_printf("An error occurred. Dumping error stack...\n");
                 if (!silence)
                     hpav_dump_error_stack(error_stack);
                 hpav_free_error_stack(&error_stack);
-                result = MTK_VS_FILE_ACCESS_REQ_FAIL;
+                rv = -1;
+            } else if (response != NULL) {
+                hpav_mtk_vs_file_access_cnf_mstatus_t cnf_result =
+                    process_mtk_vs_file_access_cnf(cmd, response);
+                if (cnf_result ==
+                    HPAV_MTK_FILE_ACCESS_CNF_MSTATUS_FAIL) {
+                    test_mtk_printf("An error occurred. Dumping "
+                                    "error stack...\n");
+                    if (!silence)
+                        hpav_dump_error_stack(error_stack);
+                    hpav_free_error_stack(&error_stack);
+                    rv = HPAV_NOK;
+                }
+                memcpy(dest_mac, response->sta_mac_addr,
+                       ETH_MAC_ADDRESS_SIZE);
+                mme_sent.total_fragments =
+                    response->total_fragments;
+                mme_sent.fragment_number =
+                    response->fragment_number + 1;
+
+                if (cmd->op ==
+                        HPAV_MTK_VS_FILE_ACCESS_REQ_OP_WRITE ||
+                    response->op ==
+                        HPAV_MTK_VS_FILE_ACCESS_REQ_OP_SAVE) {
+                    if (retry_count == 0 &&
+                        response->fragment_number % 10 == 0)
+                        test_mtk_printf("=");
+                }
+                retry_count = 0;
+            } else {
+                ++retry_count;
+                if (retry_count >= 3) {
+                    test_mtk_printf(
+                        "Timeout:maximum retry %d times\n",
+                        retry_count);
+                    rv = MTK_VS_FILE_ACCESS_REQ_FAIL;
+                    break;
+                }
             }
-        } else {
-            unsigned int num_interfaces =
-                hpav_get_number_of_interfaces(interfaces);
-            test_mtk_printf("Interface number %d not found (0-%d available)\n",
-                            interface_num_to_open, (num_interfaces - 1));
-            result = EXIT_USAGE;
-        }
-        // Free list of interfaces
-        hpav_free_interfaces(interfaces);
-    } else {
-        test_mtk_printf("No interface available\n");
-        result = MTK_VS_FILE_ACCESS_REQ_FAIL;
+        } while (
+            rv == HPAV_OK &&
+            ((mme_sent.total_fragments == 0 && response == NULL) ||
+             mme_sent.fragment_number < mme_sent.total_fragments));
+
+        if (buf != NULL)
+            free(buf);
+
+        test_mtk_printf("\n");
     }
-    return result;
+    // Free response
+    hpav_free_mtk_vs_file_access_cnf(response);
+    return rv;
 }
