@@ -28,6 +28,8 @@
 #include "parson.h"
 #include "stdbool.h"
 #include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
 #include "exitcodes.h"
 
 #ifdef WIN32
@@ -40,18 +42,70 @@
 #define DEVICE_INKA_CONF_PATH "/inka.conf"
 #define DEVICE_INKA_UPDATE_CONF_PATH "/inka_update.conf"
 #define PSD_Notched 15
+
+#ifdef WIN32
+#define CONF_FILE_TEMP_PATH_MAX MAX_PATH
+#else
+#define CONF_FILE_TEMP_PATH_MAX 256
+#endif
+
 typedef struct {
     int startCarrier;
     int endCarrier;
 } NotchCarrierRange;
 
+static int conf_file_create_temp_path(char *path, size_t path_size,
+                                      const char *prefix) {
+#ifdef WIN32
+    char temp_dir[MAX_PATH];
+    char temp_path[MAX_PATH];
+
+    if (GetTempPathA(sizeof(temp_dir), temp_dir) == 0)
+        return -1;
+    if (GetTempFileNameA(temp_dir, prefix, 0, temp_path) == 0)
+        return -1;
+    if (strlen(temp_path) + 1 > path_size) {
+        remove(temp_path);
+        return -1;
+    }
+
+    strcpy(path, temp_path);
+    return 0;
+#else
+    int fd;
+
+    if (snprintf(path, path_size, "/tmp/%s.XXXXXX", prefix) >=
+        (int)path_size)
+        return -1;
+
+    fd = mkstemp(path);
+    if (fd < 0)
+        return -1;
+
+    close(fd);
+    return 0;
+#endif
+}
+
 int conf_file_read(hpav_chan_t *channel, int argc, char *argv[]) {
     char *param[5];
     bool inka_update_exist = false;
+    char inka_conf_tmp[CONF_FILE_TEMP_PATH_MAX] = "";
+    char inka_update_conf_tmp[CONF_FILE_TEMP_PATH_MAX] = "";
     do {
         int rv = 0;
         if (argc < 1)
             break;
+        if (conf_file_create_temp_path(inka_conf_tmp, sizeof(inka_conf_tmp),
+                                       "ink") != 0 ||
+            conf_file_create_temp_path(inka_update_conf_tmp,
+                                       sizeof(inka_update_conf_tmp),
+                                       "inu") != 0) {
+            printf("Failed : create temp file!\n");
+            remove(inka_conf_tmp);
+            remove(inka_update_conf_tmp);
+            return -1;
+        }
         /** Read inka.conf. */
         if (argc > 1)
             param[0] = argv[1];
@@ -60,25 +114,27 @@ int conf_file_read(hpav_chan_t *channel, int argc, char *argv[]) {
         param[1] = "save";
         param[2] = DEVICE_INKA_CONF_PATH;
         param[3] = "output";
-        param[4] = "inka.conf.tmp";
+        param[4] = inka_conf_tmp;
         if (test_mme_mtk_vs_file_access_req(channel, 5, &param[0]) !=
             0) {
             printf("Failed : read inka.conf!\n");
+            remove(inka_conf_tmp);
+            remove(inka_update_conf_tmp);
             return -1;
         }
         /** Try to read inka_update.conf. inka_update.conf may not exist. */
         param[2] = DEVICE_INKA_UPDATE_CONF_PATH;
-        param[4] = "inka_update.conf.tmp";
+        param[4] = inka_update_conf_tmp;
         if (test_mme_mtk_vs_file_access_req(channel, 5, &param[0]) == 0)
             inka_update_exist = true;
-        JSON_Value *inka = json_parse_file("inka.conf.tmp");
+        JSON_Value *inka = json_parse_file(inka_conf_tmp);
         /** Merge inka.conf and inka_update.conf if needed. */
         if (inka_update_exist) {
-            JSON_Value *inka_update = json_parse_file("inka_update.conf.tmp");
+            JSON_Value *inka_update = json_parse_file(inka_update_conf_tmp);
             if (JSONSuccess != json_value_merge(inka, inka_update)) {
                 printf("Failed : JSON merge!\n");
-                remove("inka.conf.tmp");
-                remove("inka_update.conf.tmp");
+                remove(inka_conf_tmp);
+                remove(inka_update_conf_tmp);
                 return -1;
             }
         }
@@ -86,8 +142,8 @@ int conf_file_read(hpav_chan_t *channel, int argc, char *argv[]) {
             printf("Failed : JSON to file!\n");
             rv = -1;
         }
-        remove("inka.conf.tmp");
-        remove("inka_update.conf.tmp");
+        remove(inka_conf_tmp);
+        remove(inka_update_conf_tmp);
         return rv;
     } while (0);
     printf("Usage : hpav_test conf_file read interface filename [mac_address]\n");
