@@ -28,14 +28,14 @@
 #include "hpav_mtk_field.h"
 #include "openssl_md5.h"
 #include "util.h"
-#include "stdbool.h"
-#include "stdarg.h"
+#include <stdbool.h>
+#include <stdarg.h>
 #include "exitcodes.h"
 
 #ifdef WIN32
-#include "windows.h"
+#include <windows.h>
 #else
-#include "unistd.h"
+#include <unistd.h>
 #include <netinet/in.h>
 #endif
 
