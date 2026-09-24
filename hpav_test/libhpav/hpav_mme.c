@@ -26,17 +26,17 @@
 // Avoid unnecessary warnings with VC
 #define _CRT_SECURE_NO_WARNINGS 1
 
-#include "pcap.h"
+#include <pcap.h>
 #include "hpav_api.h"
 #include "hpav_utils.h"
 #include "hpav_mme.h"
 #include "hpav_mtk_api.h"
 
 // For crc32 used in encrypted payload
-#include "zlib.h"
+#include <zlib.h>
 
 // AES encryption from OpenSSL
-#include "openssl/aes.h"
+#include <openssl/aes.h>
 
 const unsigned char broadcast_mac_addr[ETH_MAC_ADDRESS_SIZE] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -490,7 +490,7 @@ HPAV_MME_SNDRCV_IMPL(cm_encrypted_payload, ind, ind,
 HPAV_MME_SNDRCV_IMPL(cm_set_key, req, cnf, MMTYPE_CM_SET_KEY_CNF);
 HPAV_MME_SNDRCV_IMPL(cm_amp_map, req, cnf, MMTYPE_CM_AMP_MAP_CNF);
 
-#include "openssl/rand.h"
+#include <openssl/rand.h>
 // Encrypt a ETH packet into a cm_encrypted_payload_ind data structure using DAK
 // encryption
 // (simpler version which doesn't support chained packets, can be extended in

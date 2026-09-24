@@ -28,7 +28,7 @@
 
 // Define this macro to get pcap_open macros
 #define HAVE_REMOTE
-#include "pcap.h"
+#include <pcap.h>
 #undef HAVE_REMOTE
 
 #include "hpav_api.h"

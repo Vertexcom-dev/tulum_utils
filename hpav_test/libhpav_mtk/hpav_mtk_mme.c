@@ -26,7 +26,7 @@
 // Avoid unnecessary warnings with VC
 #define _CRT_SECURE_NO_WARNINGS 1
 
-#include "pcap.h"
+#include <pcap.h>
 
 // To include Mstar specific MMEs
 #include "hpav_api.h"
@@ -34,7 +34,7 @@
 #include "hpav_mtk_api.h"
 #include "hpav_utils.h"
 
-#include "stdio.h"
+#include <stdio.h>
 
 // Special encode for Mstar
 #define HPAV_ENCODE_MTK_MME_IMPL(MME_NAME, MMETYPE_REQ)                        \

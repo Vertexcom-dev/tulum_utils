@@ -26,16 +26,16 @@
 #include "hpav_api.h"
 #include "hpav_utils.h"
 #include "parson.h"
-#include "stdbool.h"
-#include "stdio.h"
-#include "stdlib.h"
-#include "string.h"
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "exitcodes.h"
 
 #ifdef WIN32
-#include "windows.h"
+#include <windows.h>
 #else
-#include "unistd.h"
+#include <unistd.h>
 #endif
 
 #define MTK_LINK_LOCAL_ADDR "00:13:d7:00:00:01"

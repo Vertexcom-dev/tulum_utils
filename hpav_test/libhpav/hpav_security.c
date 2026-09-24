@@ -24,7 +24,7 @@
 // Security related functions
 // Algorithms implementation comes from OpenSSL
 
-#include "openssl/sha.h"
+#include <openssl/sha.h>
 
 #include "hpav_api.h"
 

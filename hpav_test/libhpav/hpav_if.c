@@ -40,7 +40,7 @@
 #include <stdlib.h>
 
 #include "hpav_api.h"
-#include "pcap.h"
+#include <pcap.h>
 
 #ifdef WIN32
 
