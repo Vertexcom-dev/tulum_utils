@@ -28,7 +28,7 @@
 
 // Define this macro to get pcap_open macros
 #define HAVE_REMOTE
-#include "pcap.h"
+#include <pcap.h>
 #undef HAVE_REMOTE
 
 #include "hpav_api.h"
@@ -67,6 +67,13 @@ hpav_chan_t *hpav_open_channel(struct hpav_if *interface_to_open,
 
         // Built returned structure
         return_chan = malloc(sizeof(hpav_chan_t));
+        if (return_chan == NULL) {
+            pcap_close(pcap_chan);
+            hpav_add_error(error_stack, hpav_error_category_internal,
+                           hpav_error_module_core, HPAV_NOK,
+                           "Cannot allocate channel", NULL);
+            return NULL;
+        }
         return_chan->pcap_chan = pcap_chan;
         memcpy(return_chan->mac_addr, interface_to_open->mac_addr,
                ETH_MAC_ADDRESS_SIZE);

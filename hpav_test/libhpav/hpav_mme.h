@@ -77,7 +77,14 @@ struct hpav_mme_packet *hpav_defrag_frames(struct hpav_eth_frame *frames);
         struct hpav_mme_packet *new_packet =                                   \
             (struct hpav_mme_packet *)malloc(sizeof(struct hpav_mme_packet));  \
         struct hpav_mme_frame *mme_frame = NULL;                               \
+        if (new_packet == NULL) {                                              \
+            return NULL;                                                       \
+        }                                                                      \
         new_mme = (unsigned char *)malloc(mme_size);                           \
+        if (new_mme == NULL) {                                                 \
+            free(new_packet);                                                  \
+            return NULL;                                                       \
+        }                                                                      \
         mme_frame = (struct hpav_mme_frame *)new_mme;                          \
         mme_frame->header.mmv = MME_HEADER_MMV_HPAV11; /* HPAV 1.1 (spec       \
                                                           1.0.10 is a          \
@@ -130,12 +137,20 @@ struct hpav_mme_packet *hpav_defrag_frames(struct hpav_eth_frame *frames);
         while (packets != NULL) {                                              \
             struct hpav_##MME_NAME *new_mme =                                  \
                 malloc(sizeof(struct hpav_##MME_NAME));                        \
+            if (new_mme == NULL) {                                             \
+                hpav_free_##MME_NAME(returned_mme);                            \
+                return NULL;                                                   \
+            }                                                                  \
             /* The CNF struct contains non ETH level data that we don't need   \
                to copy                                                         \
                The MME data contains the MME header, we should read past it */ \
-            hpav_smart_copy_##MME_NAME(                                        \
-                new_mme, packets->data + sizeof(struct hpav_mme_header),       \
-                packets->data_size - sizeof(struct hpav_mme_header));          \
+            if (hpav_smart_copy_##MME_NAME(                                    \
+                    new_mme, packets->data + sizeof(struct hpav_mme_header),   \
+                    packets->data_size - sizeof(struct hpav_mme_header)) != 0) { \
+                free(new_mme);                                                 \
+                hpav_free_##MME_NAME(returned_mme);                            \
+                return NULL;                                                   \
+            }                                                                  \
             new_mme->next = NULL;                                              \
             memcpy(new_mme->sta_mac_addr, packets->src_mac_addr,               \
                    ETH_MAC_ADDRESS_SIZE);                                      \
@@ -195,6 +210,9 @@ static inline void rx_callback(u_char *user,
         /* Right packet found, add to the chain */
         struct hpav_eth_frame *new_frame =
             (struct hpav_eth_frame *)malloc(sizeof(struct hpav_eth_frame));
+        if (new_frame == NULL) {
+            return;
+        }
         memset(new_frame, 0, sizeof(struct hpav_eth_frame));
         memcpy(new_frame, packet_data, packet_header->caplen);
         new_frame->frame_size = packet_header->caplen;
@@ -263,10 +281,16 @@ static inline void rx_callback(u_char *user,
         /* Encode the mme into a buffer */                                     \
         tx_mme_packets = hpav_encode_##MME_PREFIX_NAME##_##MME_REQ_SUFFIX(     \
             cb_data.sta_mac_addr, cb_data.src_mac_addr, request);              \
+        if (tx_mme_packets == NULL) {                                          \
+            return HPAV_NOK;                                                    \
+        }                                                                      \
         /* Build the frames */                                                 \
         tx_frames = hpav_build_frames(tx_mme_packets, ETH_FRAME_MIN_SIZE);     \
         /* TX packets not needed anymore */                                    \
         hpav_free_mme_packets(tx_mme_packets);                                 \
+        if (tx_frames == NULL) {                                               \
+            return HPAV_NOK;                                                    \
+        }                                                                      \
                                                                                \
         /* Compile the program with a filter - non-optimized */                \
         if (pcap_compile(channel->pcap_chan, &fp, "ether proto 0x88E1", 0,     \

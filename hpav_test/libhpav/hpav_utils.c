@@ -596,6 +596,8 @@ int hpav_dump_tonemap(const unsigned char *bitfield, int num_bits,
 int hpav_file_to_binary_data(const char *filename, unsigned char **result_data,
                              unsigned int *data_size,
                              struct hpav_error **error_stack) {
+    long file_size = 0;
+    char buffer[128];
     FILE *fd;
 
     // Init
@@ -605,7 +607,6 @@ int hpav_file_to_binary_data(const char *filename, unsigned char **result_data,
     // Open file
     fd = fopen(filename, "rb");
     if (fd == NULL) {
-        char buffer[128];
         sprintf(buffer, "Cannot open file <%s>\n", filename);
         hpav_add_error(error_stack, hpav_error_category_input,
                        hpav_error_module_core, HPAV_ERROR_CANNOT_OPEN_FILE,
@@ -615,15 +616,35 @@ int hpav_file_to_binary_data(const char *filename, unsigned char **result_data,
 
     // Get size
     fseek(fd, 0, SEEK_END);
-    *data_size = ftell(fd);
+    file_size = ftell(fd);
+    if (file_size <= 0) {
+    	sprintf(buffer, "Cannot open file <%s>\n", filename);
+    	hpav_add_error(error_stack, hpav_error_category_input,
+    	               hpav_error_module_core, HPAV_ERROR_CANNOT_OPEN_FILE,
+    	               "ftell failed in hpav_file_to_binary_data", buffer);
+    	fclose(fd);
+    	return HPAV_ERROR_CANNOT_OPEN_FILE;
+    }
     fseek(fd, 0, SEEK_SET);
 
     // Allocate buffer
-    *result_data = (unsigned char *)malloc(*data_size);
+    *result_data = (unsigned char *)malloc(file_size);
+    if (*result_data == NULL) {
+        fclose(fd);
+        return HPAV_NOK;
+    }
     // Read file data
-    fread(*result_data, 1, *data_size, fd);
+    if (1 != fread(*result_data, file_size, 1, fd)) {
+    	sprintf(buffer, "Cannot read file <%s>\n", filename);
+    	hpav_add_error(error_stack, hpav_error_category_input,
+    	               hpav_error_module_core, HPAV_ERROR_CANNOT_OPEN_FILE,
+    	    	       "fread failed in hpav_file_to_binary_data", buffer);
+        fclose(fd);
+    	return HPAV_ERROR_CANNOT_OPEN_FILE;
+    }
     // Close file
     fclose(fd);
+    *data_size = file_size;
     return HPAV_OK;
 }
 

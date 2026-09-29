@@ -115,6 +115,9 @@ int test_secu_encrypt(int argc, char *argv[]) {
     tx_packet.data_size =
         sizeof(struct hpav_mme_header) + sizeof(struct hpav_cm_set_key_req);
     tx_packet.data = malloc(tx_packet.data_size);
+    if (tx_packet.data == NULL) {
+        return EXIT_FAILURE;
+    }
     memcpy(tx_packet.data, &mme_header, sizeof(struct hpav_mme_header));
     memcpy(tx_packet.data + sizeof(struct hpav_mme_header), &set_key_request,
            sizeof(struct hpav_cm_set_key_req));
@@ -124,7 +127,18 @@ int test_secu_encrypt(int argc, char *argv[]) {
 
     tx_eth_frame = hpav_build_frames(&tx_packet, 0);
 
+    if (tx_eth_frame == NULL) {
+        free(tx_packet.data);
+        return EXIT_FAILURE;
+    }
+
     encrypted_mme = hpav_encrypt_with_dak(tx_eth_frame, "DAK_Password");
+
+    if (encrypted_mme == NULL) {
+        hpav_free_eth_frames(tx_eth_frame);
+        free(tx_packet.data);
+        return EXIT_FAILURE;
+    }
 
     // Dump result to compare to specification
     hpav_dump_bitfield(encrypted_mme->encrypted_data,

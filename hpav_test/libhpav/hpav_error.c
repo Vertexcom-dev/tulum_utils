@@ -82,6 +82,9 @@ int hpav_add_error(struct hpav_error **error_stack,
                    const char *message, const char *details) {
     struct hpav_error *new_error =
         (struct hpav_error *)malloc(sizeof(struct hpav_error));
+    if (new_error == NULL) {
+        return -1;
+    }
     memset(new_error, 0, sizeof(struct hpav_error));
 
     new_error->next =
@@ -93,11 +96,15 @@ int hpav_add_error(struct hpav_error **error_stack,
     new_error->error_code = error_code;
     if (message != NULL) {
         new_error->message = (char *)malloc(strlen(message) + 1);
-        strcpy(new_error->message, message);
+        if (new_error->message != NULL) {
+            strcpy(new_error->message, message);
+        }
     }
     if (details != NULL) {
         new_error->details = (char *)malloc(strlen(details) + 1);
-        strcpy(new_error->details, details);
+        if (new_error->details != NULL) {
+            strcpy(new_error->details, details);
+        }
     }
 
     return 0;

@@ -33,7 +33,7 @@
 #endif
 
 // Include pcap.h from libpcap for portable 64-bit integers
-#include "pcap.h"
+#include <pcap.h>
 
 // Need hpav_error in all API calls
 #include "hpav_error.h"

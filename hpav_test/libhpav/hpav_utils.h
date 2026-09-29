@@ -52,7 +52,7 @@ struct hpav_sys_time {
 };
 
 #endif
-#include "stdbool.h"
+#include <stdbool.h>
 
 #include "hpav_error.h"
 

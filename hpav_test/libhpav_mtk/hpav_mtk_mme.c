@@ -26,7 +26,7 @@
 // Avoid unnecessary warnings with VC
 #define _CRT_SECURE_NO_WARNINGS 1
 
-#include "pcap.h"
+#include <pcap.h>
 
 // To include Mstar specific MMEs
 #include "hpav_api.h"
@@ -34,7 +34,7 @@
 #include "hpav_mtk_api.h"
 #include "hpav_utils.h"
 
-#include "stdio.h"
+#include <stdio.h>
 
 // Special encode for Mstar
 #define HPAV_ENCODE_MTK_MME_IMPL(MME_NAME, MMETYPE_REQ)                        \
@@ -53,7 +53,14 @@
         struct hpav_mme_packet *new_packet =                                   \
             (struct hpav_mme_packet *)malloc(sizeof(struct hpav_mme_packet));  \
         struct hpav_mtk_mme_frame *mme_frame = NULL;                           \
+        if (new_packet == NULL) {                                              \
+            return NULL;                                                       \
+        }                                                                      \
         new_mme = (unsigned char *)malloc(mme_size);                           \
+        if (new_mme == NULL) {                                                 \
+            free(new_packet);                                                  \
+            return NULL;                                                       \
+        }                                                                      \
         mme_frame = (struct hpav_mtk_mme_frame *)new_mme;                      \
         mme_frame->header.mmv = 0x01; /* HPAV 1.1 */                           \
         mme_frame->header.mmtype = MMETYPE_REQ;                                \
@@ -91,7 +98,14 @@
         struct hpav_mme_packet *new_packet =                                   \
             (struct hpav_mme_packet *)malloc(sizeof(struct hpav_mme_packet));  \
         struct hpav_mtk_mme_frame *mme_frame = NULL;                           \
+        if (new_packet == NULL) {                                              \
+            return NULL;                                                       \
+        }                                                                      \
         new_mme = (unsigned char *)malloc(mme_size);                           \
+        if (new_mme == NULL) {                                                 \
+            free(new_packet);                                                  \
+            return NULL;                                                       \
+        }                                                                      \
         mme_frame = (struct hpav_mtk_mme_frame *)new_mme;                      \
         mme_frame->header.mmv = 0x01; /* HPAV 1.1 */                           \
         mme_frame->header.mmtype = MMETYPE_REQ;                                \
@@ -126,12 +140,21 @@
         while (packets != NULL) {                                              \
             struct hpav_##MME_NAME *new_mme =                                  \
                 malloc(sizeof(struct hpav_##MME_NAME));                        \
+            if (new_mme == NULL) {                                             \
+                hpav_free_##MME_NAME(returned_mme);                            \
+                return NULL;                                                   \
+            }                                                                  \
             /* The CNF struct contains non ETH level data that we don't need   \
                to copy                                                         \
                The MME data contains the MME header, we should read past it */ \
-            hpav_smart_copy_##MME_NAME(                                        \
-                new_mme, packets->data + sizeof(struct hpav_mme_header) + 3,   \
-                packets->data_size - sizeof(struct hpav_mme_header) - 3);      \
+            if (hpav_smart_copy_##MME_NAME(                                    \
+                    new_mme,                                                   \
+                    packets->data + sizeof(struct hpav_mme_header) + 3,        \
+                    packets->data_size - sizeof(struct hpav_mme_header) - 3) != 0) { \
+                free(new_mme);                                                 \
+                hpav_free_##MME_NAME(returned_mme);                            \
+                return NULL;                                                   \
+            }                                                                  \
             new_mme->next = NULL;                                              \
             memcpy(new_mme->sta_mac_addr, packets->src_mac_addr,               \
                    ETH_MAC_ADDRESS_SIZE);                                      \
@@ -188,6 +211,9 @@ int hpav_smart_copy_mtk_vs_get_nw_info_cnf(
     if (response->num_nws != 0) {
         response->nwinfo = malloc(response->num_nws *
                                   sizeof(struct hpav_mtk_vs_get_nw_info_entry));
+        if (response->nwinfo == NULL) {
+            return -1;
+        }
         memcpy(response->nwinfo, mme_data,
                response->num_nws *
                    sizeof(struct hpav_mtk_vs_get_nw_info_entry));
@@ -221,6 +247,9 @@ int hpav_smart_copy_mtk_vs_get_tonemap_cnf(
     mme_data++;
     left_mme_data_size--;
     response->tmi_data = malloc(response->tmi_length);
+    if (response->tmi_data == NULL) {
+        return -1;
+    }
     memcpy(response->tmi_data, mme_data, response->tmi_length);
     mme_data += response->tmi_length;
     left_mme_data_size -= response->tmi_length;
@@ -230,6 +259,11 @@ int hpav_smart_copy_mtk_vs_get_tonemap_cnf(
     left_mme_data_size--;
     response->int_data = malloc(response->int_length *
                                 sizeof(struct hpav_mtk_tonemap_int_entry));
+    if (response->int_data == NULL) {
+        free(response->tmi_data);
+        response->tmi_data = NULL;
+        return -1;
+    }
     memcpy(response->int_data, mme_data,
            response->int_length * sizeof(struct hpav_mtk_tonemap_int_entry));
     mme_data +=
@@ -281,6 +315,9 @@ int hpav_smart_copy_mtk_vs_get_snr_cnf(struct hpav_mtk_vs_get_snr_cnf *response,
     mme_data++;
     // Variable size arrays
     response->int_data = malloc(response->int_length * sizeof(unsigned short));
+    if (response->int_data == NULL) {
+        return -1;
+    }
     memcpy(response->int_data, mme_data,
            response->int_length * sizeof(unsigned short));
     mme_data += response->int_length * sizeof(unsigned short);
@@ -1378,10 +1415,16 @@ int hpav_mtk_vs_file_access_sndrcv(
     /* Encode the mme into a buffer */
     tx_mme_packets = hpav_encode_mtk_vs_file_access_req(
         cb_data.sta_mac_addr, cb_data.src_mac_addr, request);
+    if (tx_mme_packets == NULL) {
+        return HPAV_NOK;
+    }
     /* Build the frames */
     tx_frames = hpav_build_frames(tx_mme_packets, ETH_FRAME_MIN_SIZE);
     /* TX packets not needed anymore */
     hpav_free_mme_packets(tx_mme_packets);
+    if (tx_frames == NULL) {
+        return HPAV_NOK;
+    }
 
     /* Compile the program with a filter - non-optimized */
     if (pcap_compile(channel->pcap_chan, &fp, "ether proto 0x88E1", 0, 0) ==
@@ -1522,7 +1565,14 @@ int hpav_send_raw_mtk_mme(struct hpav_chan *channel,
     int result = -1;
 
     // First build a MME packet to feed common function calls
+    if (new_packet == NULL) {
+        return HPAV_NOK;
+    }
     new_mme = (unsigned char *)malloc(mme_size);
+    if (new_mme == NULL) {
+        free(new_packet);
+        return HPAV_NOK;
+    }
     mme_frame = (struct hpav_mtk_mme_frame *)new_mme;
     memcpy(&mme_frame->header, header, sizeof(struct hpav_mtk_mme_header));
     memcpy(&mme_frame->unknown_mtk_mme, mme_data, mme_data_size);
@@ -1535,6 +1585,10 @@ int hpav_send_raw_mtk_mme(struct hpav_chan *channel,
 
     // Build ETH frames (eventually this will allow sending fragmented MMEs
     tx_frames = hpav_build_frames(new_packet, ETH_FRAME_MIN_SIZE);
+    hpav_free_mme_packets(new_packet);
+    if (tx_frames == NULL) {
+        return HPAV_NOK;
+    }
 
     current_frame = tx_frames;
     while (current_frame != NULL) {

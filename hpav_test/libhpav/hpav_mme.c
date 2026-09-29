@@ -26,17 +26,17 @@
 // Avoid unnecessary warnings with VC
 #define _CRT_SECURE_NO_WARNINGS 1
 
-#include "pcap.h"
+#include <pcap.h>
 #include "hpav_api.h"
 #include "hpav_utils.h"
 #include "hpav_mme.h"
 #include "hpav_mtk_api.h"
 
 // For crc32 used in encrypted payload
-#include "zlib.h"
+#include <zlib.h>
 
 // AES encryption from OpenSSL
-#include "openssl/aes.h"
+#include <openssl/aes.h>
 
 const unsigned char broadcast_mac_addr[ETH_MAC_ADDRESS_SIZE] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -80,12 +80,18 @@ int hpav_free_mme_packets(struct hpav_mme_packet *packets) {
 // Support for multiple MME packets for the future
 struct hpav_eth_frame *hpav_build_frames(struct hpav_mme_packet *mme_packets,
                                          unsigned int min_size) {
+    if (mme_packets == NULL) {
+        return NULL;
+    }
     // Check payload size (does it fit in one Ethernet frame)
     if (mme_packets->data_size <= ETH_FRAME_MAX_PAYLOAD) {
         // If the mme size is smaller than the maximum payload, build one simple
         // frame
         struct hpav_eth_frame *new_frame =
             malloc(sizeof(struct hpav_eth_frame));
+        if (new_frame == NULL) {
+            return NULL;
+        }
         memset(new_frame, 0, sizeof(struct hpav_eth_frame));
         // ETH header data
         memcpy(new_frame->header.dst_mac_addr, mme_packets->dst_mac_addr,
@@ -185,6 +191,9 @@ int hpav_defrag_add_to_group_list(struct hpav_defrag_group_list *group_list,
     // If no group found, create new group and add to group list
     if (group_found == NULL) {
         group_found = malloc(sizeof(struct hpav_defrag_group));
+        if (group_found == NULL) {
+            return -1;
+        }
         memset(group_found, 0, sizeof(struct hpav_defrag_group));
         if (last_group_list->group == NULL) {
             // This case is for the first group added to the list as the caller
@@ -194,6 +203,10 @@ int hpav_defrag_add_to_group_list(struct hpav_defrag_group_list *group_list,
             // Standard case, we allocate a group_list node
             struct hpav_defrag_group_list *new_group_list =
                 malloc(sizeof(struct hpav_defrag_group_list));
+            if (new_group_list == NULL) {
+                free(group_found);
+                return -1;
+            }
             new_group_list->group = group_found;
             new_group_list->next = NULL;
             last_group_list->next = new_group_list;
@@ -203,6 +216,9 @@ int hpav_defrag_add_to_group_list(struct hpav_defrag_group_list *group_list,
         // Allocate a new group node and chain
         struct hpav_defrag_group *new_group =
             malloc(sizeof(struct hpav_defrag_group));
+        if (new_group == NULL) {
+            return -1;
+        }
         new_group->frame = frame;
         new_group->next = NULL;
 
@@ -277,6 +293,9 @@ hpav_defrag_grouped_frames(struct hpav_defrag_group *group) {
 
         // New packet to return to caller
         new_packet = malloc(sizeof(struct hpav_mme_packet));
+        if (new_packet == NULL) {
+            return NULL;
+        }
 
         // New packet
         memset(new_packet, 0, sizeof(struct hpav_mme_packet));
@@ -298,6 +317,10 @@ hpav_defrag_grouped_frames(struct hpav_defrag_group *group) {
         // Allocate buffer for MME data (this time one header is required)
         new_packet->data_size += size_of_mme_header;
         new_packet->data = malloc(new_packet->data_size);
+        if (new_packet->data == NULL) {
+            free(new_packet);
+            return NULL;
+        }
         // Loop once more to copy the data
         current_group = group;
         fragment_index = 0;
@@ -352,11 +375,17 @@ struct hpav_mme_packet *hpav_defrag_frames(struct hpav_eth_frame *frames) {
     // Group list
     struct hpav_defrag_group_list *group_list =
         malloc(sizeof(struct hpav_defrag_group_list));
+    if (group_list == NULL) {
+        return NULL;
+    }
     memset(group_list, 0, sizeof(struct hpav_defrag_group_list));
 
     while (current_frame != NULL) {
         // Add frame to the group_list
-        hpav_defrag_add_to_group_list(group_list, current_frame);
+        if (hpav_defrag_add_to_group_list(group_list, current_frame) != 0) {
+            hpav_defrag_free_group_list(group_list);
+            return NULL;
+        }
         current_frame = current_frame->next;
     }
 
@@ -370,7 +399,9 @@ struct hpav_mme_packet *hpav_defrag_frames(struct hpav_eth_frame *frames) {
             struct hpav_mme_packet *new_mme_packet =
                 hpav_defrag_grouped_frames(current_group);
             if (new_mme_packet == NULL) {
-                // erreur de d�fragmentation
+                hpav_defrag_free_group_list(group_list);
+                hpav_free_mme_packets(new_packets);
+                return NULL;
             }
             if (new_packets == NULL) {
                 new_packets = new_mme_packet;
@@ -402,7 +433,14 @@ hpav_encode_cm_amp_map_req(unsigned char sta_mac_addr[ETH_MAC_ADDRESS_SIZE],
     struct hpav_mme_packet *new_packet =
         (struct hpav_mme_packet *)malloc(sizeof(struct hpav_mme_packet));
     struct hpav_mme_frame *mme_frame = NULL;
+    if (new_packet == NULL) {
+        return NULL;
+    }
     new_mme = (unsigned char *)malloc(mme_size);
+    if (new_mme == NULL) {
+        free(new_packet);
+        return NULL;
+    }
     mme_frame = (struct hpav_mme_frame *)new_mme;
     mme_frame->header.mmv =
         MME_HEADER_MMV_HPAV11; /* HPAV 1.1 (spec 1.0.10 is a prerelease
@@ -436,7 +474,14 @@ struct hpav_mme_packet *hpav_encode_cm_encrypted_payload_ind(
     struct hpav_mme_packet *new_packet =
         (struct hpav_mme_packet *)malloc(sizeof(struct hpav_mme_packet));
     struct hpav_mme_frame *mme_frame = NULL;
+    if (new_packet == NULL) {
+        return NULL;
+    }
     new_mme = (unsigned char *)malloc(mme_size);
+    if (new_mme == NULL) {
+        free(new_packet);
+        return NULL;
+    }
     mme_frame = (struct hpav_mme_frame *)new_mme;
     mme_frame->header.mmv =
         MME_HEADER_MMV_HPAV11; /* HPAV 1.1 (spec 1.0.10 is a prerelease
@@ -470,6 +515,9 @@ int hpav_smart_copy_cm_encrypted_payload_ind(
         mme_data_size - HPAV_CM_ENCRYPTED_PAYLOAD_UNENCRYPTED_SIZE;
     response->encrypted_data =
         (unsigned char *)malloc(response->encrypted_data_length);
+    if (response->encrypted_data == NULL) {
+        return -1;
+    }
     memcpy(response->encrypted_data,
            mme_data + HPAV_CM_ENCRYPTED_PAYLOAD_UNENCRYPTED_SIZE,
            response->encrypted_data_length);
@@ -490,7 +538,7 @@ HPAV_MME_SNDRCV_IMPL(cm_encrypted_payload, ind, ind,
 HPAV_MME_SNDRCV_IMPL(cm_set_key, req, cnf, MMTYPE_CM_SET_KEY_CNF);
 HPAV_MME_SNDRCV_IMPL(cm_amp_map, req, cnf, MMTYPE_CM_AMP_MAP_CNF);
 
-#include "openssl/rand.h"
+#include <openssl/rand.h>
 // Encrypt a ETH packet into a cm_encrypted_payload_ind data structure using DAK
 // encryption
 // (simpler version which doesn't support chained packets, can be extended in
@@ -556,6 +604,13 @@ hpav_encrypt_with_dak(struct hpav_eth_frame *tx_eth_frame,
     encrypted_data = (unsigned char *)malloc(total_size);
     tx_encrypted_mme = (struct hpav_cm_encrypted_payload_ind *)malloc(
         sizeof(struct hpav_cm_encrypted_payload_ind));
+    if (data_to_encrypt == NULL || encrypted_data == NULL ||
+        tx_encrypted_mme == NULL) {
+        free(data_to_encrypt);
+        free(encrypted_data);
+        free(tx_encrypted_mme);
+        return NULL;
+    }
     memset(tx_encrypted_mme, 0, sizeof(struct hpav_cm_encrypted_payload_ind));
     // Set MME fields
     tx_encrypted_mme->peks = 0; // Destination STA DAK
@@ -655,6 +710,9 @@ hpav_decrypt_with_key(struct hpav_cm_encrypted_payload_ind *rx_encrypted_mme,
     // Buffer for decrypted payload
     decrypted_payload =
         (unsigned char *)malloc(rx_encrypted_mme->encrypted_data_length);
+    if (decrypted_payload == NULL) {
+        return NULL;
+    }
 
     // Init IV with IV from the message
     memcpy(aes_iv, rx_encrypted_mme->aes_iv, HPAV_AES_KEY_SIZE);
@@ -670,6 +728,10 @@ hpav_decrypt_with_key(struct hpav_cm_encrypted_payload_ind *rx_encrypted_mme,
     // Build new mme_packet
     new_eth_frame =
         (struct hpav_eth_frame *)malloc(sizeof(struct hpav_eth_frame));
+    if (new_eth_frame == NULL) {
+        free(decrypted_payload);
+        return NULL;
+    }
     new_eth_frame->next = NULL;
     new_eth_frame->frame_size = rx_encrypted_mme->mme_length;
     // MME data is at the beginning of the decrypted payload right after the
@@ -719,6 +781,9 @@ hpav_decrypt_nokey(struct hpav_cm_encrypted_payload_ind *rx_encrypted_mme) {
     // Build new mme_packet
     new_eth_frame =
         (struct hpav_eth_frame *)malloc(sizeof(struct hpav_eth_frame));
+    if (new_eth_frame == NULL) {
+        return NULL;
+    }
     new_eth_frame->next = NULL;
     new_eth_frame->frame_size = rx_encrypted_mme->mme_length;
     // MME data is at the beginning of the payload right after the randomfiller
@@ -857,7 +922,14 @@ int hpav_send_raw_mme(struct hpav_chan *channel,
     int result = -1;
 
     // First build a MME packet to feed common function calls
+    if (new_packet == NULL) {
+        return HPAV_NOK;
+    }
     new_mme = (unsigned char *)malloc(mme_size);
+    if (new_mme == NULL) {
+        free(new_packet);
+        return HPAV_NOK;
+    }
     mme_frame = (struct hpav_mme_frame *)new_mme;
     memcpy(&mme_frame->header, header, sizeof(struct hpav_mme_header));
     memcpy(&mme_frame->unknown_mme, mme_data, mme_data_size);
@@ -870,6 +942,10 @@ int hpav_send_raw_mme(struct hpav_chan *channel,
 
     // Build ETH frames (eventually this will allow sending fragmented MMEs
     tx_frames = hpav_build_frames(new_packet, ETH_FRAME_MIN_SIZE);
+    hpav_free_mme_packets(new_packet);
+    if (tx_frames == NULL) {
+        return HPAV_NOK;
+    }
 
     current_frame = tx_frames;
     while (current_frame != NULL) {

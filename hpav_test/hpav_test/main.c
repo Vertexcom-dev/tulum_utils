@@ -202,7 +202,7 @@ static const struct test_mme_fct_name_t test_mme_fct_name_table[] = {
 // Number of parameters depends on the type of MME
 int test_mme(int argc, char *argv[]) {
     int nb_fct =
-        (sizeof(test_mme_fct_name_table) / sizeof(struct test_mme_fct_name_t));
+        (sizeof(test_mme_fct_name_table) / sizeof(struct test_mme_fct_name_t)) - 1;
     int i;
     int filter = argc > 0 ? 1 : 0;
     int newLine = 0;
@@ -220,7 +220,7 @@ int test_mme(int argc, char *argv[]) {
     printf("Usage : hpav_test test_mme mme_name(partial or full) interface "
            "[mac_address [parameters]]\n");
     printf("\nmme_name can be :\n   ");
-    for (i = 0; i < nb_fct; i++) {
+    for (i = 0; i <= nb_fct; i++) {
         if (filter) {
             if (strstr(test_mme_fct_name_table[i].name, argv[0])) {
                 if (newLine % 2 == 0)

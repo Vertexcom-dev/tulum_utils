@@ -53,6 +53,10 @@ int string_to_binary_data(const char *input, unsigned char **result_data,
     *result_data = (unsigned char *)malloc(
         *data_size + 4); // Add 4 to prevent buffer overrun from sscanf (which
                          // writes 4 bytes when using %2x)
+    if (*result_data == NULL) {
+        *data_size = 0;
+        return -1;
+    }
     for (input_index = 0; input_index < *data_size; ++input_index) {
         sscanf(&input[input_index * 2], "%2hhx", &(*result_data)[input_index]);
     }

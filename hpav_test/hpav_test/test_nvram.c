@@ -119,7 +119,7 @@ int test_nvram_write(hpav_chan_t *channel, int argc, char *argv[]) {
     struct hpav_error *error_stack = NULL;
     unsigned char block_data[MTK_NVRAM_BLOCK_SIZE];
     FILE *nvram = NULL;
-    unsigned short nvram_size = MTK_NVRAM_BLOCK_SIZE;
+    long nvram_size = MTK_NVRAM_BLOCK_SIZE;
     int block_index = 0;
     struct hpav_mtk_vs_set_nvram_req mme_sent;
     struct hpav_mtk_vs_set_nvram_cnf *response = NULL;
@@ -144,12 +144,18 @@ int test_nvram_write(hpav_chan_t *channel, int argc, char *argv[]) {
     }
 
     fseek(nvram, 0, SEEK_END);
-    nvram_size = (unsigned short)ftell(nvram);
+    nvram_size = ftell(nvram);
+    if (nvram_size != MTK_NVRAM_BLOCK_SIZE) {
+        printf("Unexpected ftell result for %s\n", argv[1]);
+        fclose(nvram);
+        return -1;
+    }
     rewind(nvram);
 
     memset(block_data, 0, MTK_NVRAM_BLOCK_SIZE);
     if (1 != fread(block_data, nvram_size, 1, nvram)) {
         printf("error while reading file %s\n", argv[1]);
+        fclose(nvram);
         return -1;
     }
 
@@ -207,6 +213,7 @@ int test_nvram_parse(int argc, char *argv[]) {
 
     if (1 != fread(&nvram_data, nvram_read_size, 1, nvram)) {
         printf("error while reading file %s\n", argv[0]);
+        fclose(nvram);
         return -1;
     }
 
@@ -241,6 +248,7 @@ int test_nvram_modify(int argc, char *argv[]) {
 
     if (1 != fread(&nvram_data, nvram_read_size, 1, nvram)) {
         printf("error while reading file %s\n", argv[0]);
+        fclose(nvram);
         return -1;
     }
 
@@ -250,11 +258,10 @@ int test_nvram_modify(int argc, char *argv[]) {
 
     int i;
     if (strcmp(argv[1], "mac") == 0) {
+    	unsigned char mac_data[6];
         int mac_int[6];
         sscanf(argv[2], "%x:%x:%x:%x:%x:%x", &mac_int[0], &mac_int[1],
                &mac_int[2], &mac_int[3], &mac_int[4], &mac_int[5]);
-        unsigned char *mac_data;
-        mac_data = malloc(6);
         for (i = 0; i < 6; i++) {
             mac_data[i] = (unsigned char)mac_int[i];
         }

@@ -40,7 +40,7 @@
 #include <stdlib.h>
 
 #include "hpav_api.h"
-#include "pcap.h"
+#include <pcap.h>
 
 #ifdef WIN32
 
@@ -52,6 +52,9 @@ int hpav_populate_mac_addr(hpav_if_t **interfaces_list) {
     PIP_ADAPTER_INFO pAdapter = NULL;
     ULONG ulOutBufLen = sizeof(IP_ADAPTER_INFO);
     pAdapterInfo = (IP_ADAPTER_INFO *)malloc(sizeof(IP_ADAPTER_INFO));
+    if (pAdapterInfo == NULL) {
+        return -1;
+    }
 
     if (interfaces_list != NULL) {
         first_if = *interfaces_list;
@@ -64,6 +67,9 @@ int hpav_populate_mac_addr(hpav_if_t **interfaces_list) {
     if (GetAdaptersInfo(pAdapterInfo, &ulOutBufLen) == ERROR_BUFFER_OVERFLOW) {
         free(pAdapterInfo);
         pAdapterInfo = (IP_ADAPTER_INFO *)malloc(ulOutBufLen);
+        if (pAdapterInfo == NULL) {
+            return -1;
+        }
     }
 
     if (GetAdaptersInfo(pAdapterInfo, &ulOutBufLen) == NO_ERROR) {
@@ -207,15 +213,35 @@ int hpav_get_interfaces(hpav_if_t **interface_list,
 #endif
             // New hpav_if
             new_if = malloc(sizeof(hpav_if_t));
+            if (new_if == NULL) {
+                pcap_freealldevs(pcap_interfaces);
+                hpav_free_interfaces(first_if);
+                return HPAV_NOK;
+            }
+            new_if->name = NULL;
+            new_if->description = NULL;
             // Initialise interface MAC address
             memset(new_if->mac_addr, 0, ETH_MAC_ADDRESS_SIZE);
             // Copy interface name
             new_if->name = malloc(strlen(pcap_interfaces_current->name) + 1);
+            if (new_if->name == NULL) {
+                free(new_if);
+                pcap_freealldevs(pcap_interfaces);
+                hpav_free_interfaces(first_if);
+                return HPAV_NOK;
+            }
             strcpy(new_if->name, pcap_interfaces_current->name);
             // Copy interface description (can be NULL)
             if (pcap_interfaces_current->description != NULL) {
                 new_if->description =
                     malloc(strlen(pcap_interfaces_current->description) + 1);
+                if (new_if->description == NULL) {
+                    free(new_if->name);
+                    free(new_if);
+                    pcap_freealldevs(pcap_interfaces);
+                    hpav_free_interfaces(first_if);
+                    return HPAV_NOK;
+                }
                 strcpy(new_if->description, pcap_interfaces_current->description);
             } else {
                 new_if->description = NULL;
