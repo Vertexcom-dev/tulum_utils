@@ -208,7 +208,7 @@ int test_mme(int argc, char *argv[]) {
     int newLine = 0;
 
     if ((argc > 1) && (1 <= strlen(argv[1]))) {
-        for (i = nb_fct; i >= 0; i--) {
+        for (i = nb_fct - 1; i >= 0; i--) {
             if (strcmp(argv[0], test_mme_fct_name_table[i].name) == 0) {
                 return execute_on_channel(argv[1],
                                           test_mme_fct_name_table[i].fct,
