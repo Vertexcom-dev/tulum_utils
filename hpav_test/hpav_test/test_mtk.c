@@ -87,7 +87,7 @@ int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
     FILE *nvram = NULL;
     long nvram_size = MTK_NVRAM_BLOCK_SIZE;
     long nvram_read_size = 0;
-    unsigned int nvram_block_size_max = 0;
+    unsigned int last_block_index = 0;
     struct hpav_mtk_vs_set_nvram_req mme_sent;
     struct hpav_mtk_vs_set_nvram_cnf *response = NULL;
     // Broadcast by default
@@ -125,8 +125,8 @@ int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
     rewind(nvram);
 
     // Check if the index of NVRAM block to write larger than NVRAM size
-    nvram_block_size_max = nvram_size / MTK_NVRAM_BLOCK_SIZE;
-    if (block_index > nvram_block_size_max) {
+    last_block_index = (nvram_size - 1) / MTK_NVRAM_BLOCK_SIZE;
+    if (block_index > last_block_index) {
         printf("error: your nvram size is %ld, but the index of NVRAM block you "
                "want to write is %d",
                nvram_size, block_index);
@@ -140,9 +140,9 @@ int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
 
     // based on the index of NVRAM block to write, you should check how many
     // size to read
-    if (block_index == nvram_block_size_max) {
+    if (block_index == last_block_index) {
         nvram_read_size =
-            nvram_size - (nvram_block_size_max * MTK_NVRAM_BLOCK_SIZE);
+            nvram_size - (last_block_index * MTK_NVRAM_BLOCK_SIZE);
     } else {
         nvram_read_size = MTK_NVRAM_BLOCK_SIZE;
     }
