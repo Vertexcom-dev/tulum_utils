@@ -2363,7 +2363,7 @@ process_mtk_vs_file_access_cnf(mtk_vs_file_access_command_t *command,
         response = response->next;
     }
 
-    if (command->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_SCAN_STA) {
+    if (fp != NULL && command->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_SCAN_STA) {
         fclose(fp);
     }
     return result;
@@ -2504,8 +2504,9 @@ int test_mme_mtk_vs_file_access_req(hpav_chan_t *channel, int argc,
             }
             ++sta_count;
         }
-
-        fclose(fp);
+        if (fp != NULL) {
+            fclose(fp);
+        }
     } else {
         memcpy(mac_list[sta_count], dest_mac, ETH_MAC_ADDRESS_SIZE);
         sta_count = 1;
