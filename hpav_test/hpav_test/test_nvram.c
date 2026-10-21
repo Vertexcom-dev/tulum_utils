@@ -150,6 +150,7 @@ int test_nvram_write(hpav_chan_t *channel, int argc, char *argv[]) {
     memset(block_data, 0, MTK_NVRAM_BLOCK_SIZE);
     if (1 != fread(block_data, nvram_size, 1, nvram)) {
         printf("error while reading file %s\n", argv[1]);
+        fclose(nvram);
         return -1;
     }
 
@@ -207,6 +208,7 @@ int test_nvram_parse(int argc, char *argv[]) {
 
     if (1 != fread(&nvram_data, nvram_read_size, 1, nvram)) {
         printf("error while reading file %s\n", argv[0]);
+        fclose(nvram);
         return -1;
     }
 
@@ -241,6 +243,7 @@ int test_nvram_modify(int argc, char *argv[]) {
 
     if (1 != fread(&nvram_data, nvram_read_size, 1, nvram)) {
         printf("error while reading file %s\n", argv[0]);
+        fclose(nvram);
         return -1;
     }
 
