@@ -399,11 +399,11 @@ static const struct fct_name_t main_fct_name_table[] = {
 };
 
 int main(int argc, char *argv[]) {
-    int nb_fct = (sizeof(main_fct_name_table) / sizeof(struct fct_name_t)) - 1;
+    int nb_fct = (sizeof(main_fct_name_table) / sizeof(struct fct_name_t));
     int i = 0;
 
     if (argc > 1)
-        for (i = nb_fct; i >= 0; i--)
+        for (i = nb_fct - 1; i >= 0; i--)
             if (strcmp(argv[1], main_fct_name_table[i].name) == 0) {
                 int rv =
                     main_fct_name_table[i].fct(argc - 2, &argv[2]);
@@ -419,7 +419,7 @@ int main(int argc, char *argv[]) {
 
     // Help for user.
     printf("\nCommands are :\n");
-    for (i = nb_fct; i >= 0; i--)
+    for (i = nb_fct - 1; i >= 0; i--)
         printf("   %s\n", main_fct_name_table[i].name);
 
     return EXIT_USAGE;

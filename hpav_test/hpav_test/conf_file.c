@@ -738,11 +738,9 @@ int conf_file_modify(int argc, char *argv[]) {
             return -1;
         }
 
-        int nb_fct = (sizeof(conf_file_modify_fct_name_table) /
-                      sizeof(struct fct_name_t)) -
-                     1;
+        int nb_fct = sizeof(conf_file_modify_fct_name_table) / sizeof(struct fct_name_t);
         int i = 0;
-        for (i = nb_fct; i >= 0; i--)
+        for (i = nb_fct - 1; i >= 0; i--)
             if (strcmp(argv[1], conf_file_modify_fct_name_table[i].name) == 0) {
                 result = conf_file_modify_fct_name_table[i].fct(ctx, argc - 2,
                     &argv[2]);
