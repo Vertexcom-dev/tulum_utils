@@ -102,9 +102,14 @@ struct hpav_mme_packet *hpav_defrag_frames(struct hpav_eth_frame *frames);
     int hpav_smart_copy_##MME_NAME(struct hpav_##MME_NAME *new_mme,            \
                                    unsigned char *mme_data,                    \
                                    unsigned int mme_data_size) {               \
-        memcpy(new_mme, mme_data,                                              \
-               sizeof(struct hpav_##MME_NAME) - sizeof(void *) -               \
-                   ETH_MAC_ADDRESS_SIZE);                                      \
+        /* sta_mac_addr and next are set by the decode macro, mme_data_size    \
+           may include Ethernet padding or be shorter than the prefix */       \
+        size_t prefix_size = sizeof(struct hpav_##MME_NAME) - sizeof(void *) - \
+                             ETH_MAC_ADDRESS_SIZE;                             \
+        size_t copy_size =                                                     \
+            (mme_data_size < prefix_size) ? mme_data_size : prefix_size;       \
+        memset(new_mme, 0, prefix_size);                                       \
+        memcpy(new_mme, mme_data, copy_size);                                  \
         return 0;                                                              \
     }
 
