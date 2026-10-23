@@ -297,6 +297,7 @@ int test_nvram(int argc, char *argv[]) {
                 return execute_on_channel(argv[1], test_nvram_write, argc - 2, &argv[2]);
 
             printf("Usage: $hpav_test nvram write interface mac input_file\n");
+            printf("input_file must be smaller or equal %u byte\n", MTK_NVRAM_BLOCK_SIZE);
         } else if (strcmp(argv[0], "parse") == 0) {
             return test_nvram_parse(argc - 1, &argv[1]);
         } else if (strcmp(argv[0], "modify") == 0) {

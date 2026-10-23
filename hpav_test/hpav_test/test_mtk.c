@@ -85,7 +85,7 @@ int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
     unsigned int block_index;
     unsigned char block_data[MTK_NVRAM_BLOCK_SIZE];
     FILE *nvram = NULL;
-    unsigned short nvram_size = MTK_NVRAM_BLOCK_SIZE;
+    long nvram_size = MTK_NVRAM_BLOCK_SIZE;
     long nvram_read_size = 0;
     unsigned int nvram_block_size_max = 0;
     struct hpav_mtk_vs_set_nvram_req mme_sent;
@@ -115,14 +115,19 @@ int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
 
     // Obtain file size
     fseek(nvram, 0, SEEK_END);
-    nvram_size = (unsigned short)ftell(nvram);
+    nvram_size = ftell(nvram);
+    if (nvram_size <= 0) {
+        printf("Unexpected ftell result for %s\n", argv[2]);
+        fclose(nvram);
+        return -1;
+    }
 
     rewind(nvram);
 
     // Check if the index of NVRAM block to write larger than NVRAM size
     nvram_block_size_max = nvram_size / MTK_NVRAM_BLOCK_SIZE;
     if (block_index > nvram_block_size_max) {
-        printf("error: your nvram size is %d, but the index of NVRAM block you "
+        printf("error: your nvram size is %ld, but the index of NVRAM block you "
                "want to write is %d",
                nvram_size, block_index);
         fclose(nvram);
@@ -2453,7 +2458,8 @@ int test_mme_mtk_vs_file_access_req(hpav_chan_t *channel, int argc,
 
     mtk_vs_file_access_command_t *cmd = NULL;
     FILE *fp = NULL;
-    unsigned int file_size = 0, remain_len, size;
+    long file_size = 0;
+    unsigned int remain_len, size;
     char *buf = NULL;
     int rv = 0;
 
@@ -2529,6 +2535,12 @@ int test_mme_mtk_vs_file_access_req(hpav_chan_t *channel, int argc,
 
             fseek(fp, 0, SEEK_END);
             file_size = ftell(fp);
+            if (file_size <= 0) {
+                test_mtk_printf("Unexpected ftell result - %s\n",
+                                cmd->file_name);
+                fclose(fp);
+                return MTK_VS_FILE_ACCESS_REQ_FAIL;
+            }
             rewind(fp);
 
             buf = (char *)malloc(file_size);
