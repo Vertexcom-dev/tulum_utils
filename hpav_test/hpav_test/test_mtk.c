@@ -2544,7 +2544,13 @@ int test_mme_mtk_vs_file_access_req(hpav_chan_t *channel, int argc,
             rewind(fp);
 
             buf = (char *)malloc(file_size);
-            fread(buf, 1, file_size, fp);
+            if (1 != fread(buf, file_size, 1, fp)) {
+                test_mtk_printf("Unexpected fread result - %s\n",
+                                cmd->file_name);
+                fclose(fp);
+                free(buf);
+                return MTK_VS_FILE_ACCESS_REQ_FAIL;
+            }
             fclose(fp);
 
             mme_sent.total_fragments =

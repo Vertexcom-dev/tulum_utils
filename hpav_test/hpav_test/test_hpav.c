@@ -230,7 +230,11 @@ int test_mme_cm_amp_map_req(hpav_chan_t *channel, int argc, char *argv[]) {
 
     for (data_count = 0; data_count < amlen; data_count++) {
         fseek(fp, (data_count * 3 + data_count), SEEK_SET);
-        fread(buf, sizeof(char), 2, fp);
+        if (2 != fread(buf, sizeof(char), 2, fp)) {
+            printf("Fail to read AMDATA file\n");
+            fclose(fp);
+            return -1;
+        }
         am_data[data_count] = atoi(buf);
         if ((am_data[data_count] < 0) || (am_data[data_count] > 16)) {
             printf("AM_DATA error, [%d]=%d\n", data_count, am_data[data_count]);
