@@ -119,7 +119,7 @@ int test_nvram_write(hpav_chan_t *channel, int argc, char *argv[]) {
     struct hpav_error *error_stack = NULL;
     unsigned char block_data[MTK_NVRAM_BLOCK_SIZE];
     FILE *nvram = NULL;
-    unsigned short nvram_size = MTK_NVRAM_BLOCK_SIZE;
+    long nvram_size = MTK_NVRAM_BLOCK_SIZE;
     int block_index = 0;
     struct hpav_mtk_vs_set_nvram_req mme_sent;
     struct hpav_mtk_vs_set_nvram_cnf *response = NULL;
@@ -144,7 +144,12 @@ int test_nvram_write(hpav_chan_t *channel, int argc, char *argv[]) {
     }
 
     fseek(nvram, 0, SEEK_END);
-    nvram_size = (unsigned short)ftell(nvram);
+    nvram_size = ftell(nvram);
+    if ((nvram_size <= 0) || (nvram_size > MTK_NVRAM_BLOCK_SIZE)) {
+        printf("Unexpected ftell result for %s: %ld\n", argv[1], nvram_size);
+        fclose(nvram);
+        return -1;
+    }
     rewind(nvram);
 
     memset(block_data, 0, MTK_NVRAM_BLOCK_SIZE);
