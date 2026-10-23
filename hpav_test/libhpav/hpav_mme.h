@@ -108,13 +108,6 @@ struct hpav_mme_packet *hpav_defrag_frames(struct hpav_eth_frame *frames);
         return 0;                                                              \
     }
 
-#define HPAV_SMART_COPY_STRUCT_IMPL(MME_NAME)                                  \
-    int hpav_smart_copy_struct_##MME_NAME(struct hpav_##MME_NAME *new_mme,     \
-                                          struct hpav_##MME_NAME *mme) {       \
-        memcpy(new_mme, mme, sizeof(struct hpav_##MME_NAME));                  \
-        return 0;                                                              \
-    }
-
 #define HPAV_DECODE_MME_IMPL(MME_NAME)                                         \
     struct hpav_##MME_NAME *hpav_decode_##MME_NAME(                            \
         struct hpav_mme_packet *packets) {                                     \
