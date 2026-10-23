@@ -630,7 +630,15 @@ int hpav_file_to_binary_data(const char *filename, unsigned char **result_data,
     // Allocate buffer
     *result_data = (unsigned char *)malloc(file_size);
     // Read file data
-    fread(*result_data, 1, file_size, fd);
+    if (1 != fread(*result_data, file_size, 1, fd)) {
+        sprintf(buffer, "Cannot read file <%s>\n", filename);
+        hpav_add_error(error_stack, hpav_error_category_input,
+                       hpav_error_module_core, HPAV_ERROR_CANNOT_OPEN_FILE,
+                       "fread failed in hpav_file_to_binary_data", buffer);
+        free(*result_data);
+        fclose(fd);
+        return HPAV_ERROR_CANNOT_OPEN_FILE;
+    }
     // Close file
     fclose(fd);
     *data_size = file_size;
