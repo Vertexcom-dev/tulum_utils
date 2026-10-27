@@ -1060,18 +1060,6 @@ struct __packed hpav_mtk_mme_frame {
 
 // Functions declarations
 
-// Support function for raw MME
-int hpav_setup_mtk_mme_header(unsigned short mme_type,
-                              unsigned int num_fragments,
-                              unsigned int fragment_num,
-                              unsigned fragment_sequence_number,
-                              struct hpav_mtk_mme_header *header);
-// Send a raw MME on the channel
-int hpav_send_raw_mtk_mme(struct hpav_chan *channel,
-                          unsigned char sta_mac_addr[ETH_MAC_ADDRESS_SIZE],
-                          struct hpav_mtk_mme_header *header,
-                          unsigned char *mme_data, unsigned int mme_data_size);
-
 // Send/receive
 HPAV_MME_SNDRCV_DECL(mtk_vs_set_nvram, req, cnf);
 HPAV_MME_SNDRCV_DECL(mtk_vs_get_version, req, cnf);
@@ -1096,11 +1084,6 @@ HPAV_MME_SNDRCV_DECL(mtk_vs_pwm_generation, req, cnf);
 HPAV_MME_SNDRCV_DECL(vc_vs_set_remote_access, req, cnf);
 HPAV_MME_SNDRCV_DECL(vc_vs_get_remote_access, req, cnf);
 
-int hpav_mtk_vs_reset_ind_sndrcv(
-    struct hpav_chan *channel, unsigned char sta_mac_addr[ETH_MAC_ADDRESS_SIZE],
-    struct hpav_mtk_vs_reset_ind *request,
-    struct hpav_mtk_vs_reset_rsp **response, unsigned int timeout_ms,
-    unsigned int num_fragments, struct hpav_error **error_stack);
 int hpav_mtk_vs_file_access_sndrcv(
     struct hpav_chan *channel, unsigned char sta_mac_addr[ETH_MAC_ADDRESS_SIZE],
     struct hpav_mtk_vs_file_access_req *request,
@@ -1108,10 +1091,6 @@ int hpav_mtk_vs_file_access_sndrcv(
     unsigned int num_fragments, struct hpav_error **error_stack,
     unsigned char scan);
 
-int hpav_mtk_vs_set_tx_cali_ind_rcv(
-    struct hpav_chan *channel, struct hpav_mtk_vs_set_tx_cali_ind **response,
-    unsigned int timeout_ms, unsigned int num_fragments,
-    struct hpav_error **error_stack);
 #if defined(SWIG)
 % pointer_functions(struct hpav_mtk_vs_file_access_cnf *,
                     hpav_mtk_vs_file_access_cnf_pointer);
@@ -1123,7 +1102,6 @@ int hpav_mtk_vs_set_tx_cali_ind_rcv(
 HPAV_FREE_STRUCT_DECL(mtk_vs_set_nvram_cnf);
 HPAV_FREE_STRUCT_DECL(mtk_vs_get_version_cnf);
 HPAV_FREE_STRUCT_DECL(mtk_vs_reset_cnf);
-HPAV_FREE_STRUCT_DECL(mtk_vs_reset_rsp)
 HPAV_FREE_STRUCT_DECL(mtk_vs_get_nvram_cnf);
 HPAV_FREE_STRUCT_DECL(mtk_vs_get_tonemask_cnf);
 HPAV_FREE_STRUCT_DECL(mtk_vs_get_eth_phy_cnf);
@@ -1140,22 +1118,10 @@ HPAV_FREE_STRUCT_DECL(mtk_vs_spi_stats_cnf);
 HPAV_FREE_STRUCT_DECL(mtk_vs_file_access_cnf);
 HPAV_FREE_STRUCT_DECL(mtk_vs_get_nw_info_cnf);
 HPAV_FREE_STRUCT_DECL(mtk_vs_set_tx_cali_cnf);
-HPAV_FREE_STRUCT_DECL(mtk_vs_set_tx_cali_ind);
 HPAV_FREE_STRUCT_DECL(vc_vs_set_sniffer_conf_cnf);
 HPAV_FREE_STRUCT_DECL(mtk_vs_pwm_generation_cnf);
 HPAV_FREE_STRUCT_DECL(vc_vs_set_remote_access_cnf);
 HPAV_FREE_STRUCT_DECL(vc_vs_get_remote_access_cnf);
-
-
-HPAV_SMART_COPY_STRUCT_DECL(mtk_vs_reset_cnf);
-HPAV_SMART_COPY_STRUCT_DECL(mtk_vs_get_version_cnf);
-HPAV_SMART_COPY_STRUCT_DECL(mtk_vs_get_nw_info_entry);
-HPAV_SMART_COPY_STRUCT_DECL(mtk_vs_get_link_stats_cnf);
-HPAV_SMART_COPY_STRUCT_DECL(mtk_vs_set_tx_cali_cnf);
-HPAV_SMART_COPY_STRUCT_DECL(mtk_vs_set_tx_cali_ind);
-HPAV_SMART_COPY_STRUCT_DECL(vc_vs_set_sniffer_conf_cnf);
-HPAV_SMART_COPY_STRUCT_DECL(vc_vs_set_remote_access_cnf);
-HPAV_SMART_COPY_STRUCT_DECL(vc_vs_get_remote_access_cnf);
 
 
 #ifdef _MSC_VER

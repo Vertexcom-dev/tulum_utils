@@ -46,15 +46,3 @@ int dump_interfaces(struct hpav_if *interfaces) {
 }
 
 // Input data as an hexadecimal string
-int string_to_binary_data(const char *input, unsigned char **result_data,
-                          unsigned int *data_size) {
-    unsigned int input_index;
-    *data_size = strlen(input) / 2;
-    *result_data = (unsigned char *)malloc(
-        *data_size + 4); // Add 4 to prevent buffer overrun from sscanf (which
-                         // writes 4 bytes when using %2x)
-    for (input_index = 0; input_index < *data_size; ++input_index) {
-        sscanf(&input[input_index * 2], "%2hhx", &(*result_data)[input_index]);
-    }
-    return 0;
-}

@@ -185,35 +185,3 @@ int hpav_dump_error_stack(struct hpav_error *error_stack) {
     }
     return HPAV_OK;
 }
-
-/// Append two error stacks.
-///
-/// Appends \c error_stack to \c second_error_stack.
-/// \c *error_stack is updated to point to the new stack.
-///
-/// \param error_stack[in, out] Pointer to \c error_stack.
-/// \param second_error_stack[in] Point to new \c error_stack.
-///
-/// \retval status Returns zero on no error and non-zero on error
-///
-/// \warning // This is thread unsafe. Don't call it from different threads on
-/// the same error_stack.
-// \c error_stack must not be shared between different
-/// threads without special measures : calls to this function on the same \c
-/// error_stack must be
-/// synchronized with a lock or critical section.
-///
-int hpav_append_error_stack(struct hpav_error **error_stack,
-                            struct hpav_error *second_error_stack) {
-    // Find last error in the second stack
-    if (second_error_stack != NULL) {
-        struct hpav_error *current_error = second_error_stack;
-        while (current_error->next != NULL) {
-            current_error = current_error->next;
-        }
-        current_error->next = *error_stack; // Thread unsafe part
-        *error_stack = second_error_stack;
-    }
-
-    return HPAV_OK;
-}

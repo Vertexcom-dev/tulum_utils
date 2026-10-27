@@ -27,5 +27,3 @@
 #include <stdio.h>
 #include <stdlib.h>
 int dump_interfaces(struct hpav_if *interfaces);
-int string_to_binary_data(const char *input, unsigned char **result_data,
-                          unsigned int *data_size);

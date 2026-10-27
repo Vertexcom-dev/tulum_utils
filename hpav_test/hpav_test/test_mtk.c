@@ -26,7 +26,6 @@
 #include "hpav_utils.h"
 #include "hpav_mtk_api.h"
 #include "hpav_mtk_field.h"
-#include "openssl_md5.h"
 #include "util.h"
 #include <stdbool.h>
 #include <stdarg.h>
@@ -50,13 +49,6 @@ static void test_mtk_printf(const char *format, ...) {
     va_start(args, format);
     vprintf(format, args);
     va_end(args);
-}
-
-unsigned int hpab_strtoui(char *string) {
-    if (!strncmp(string, "0x", 2))
-        return strtoul(string, NULL, 16);
-    else
-        return strtoul(string, NULL, 10);
 }
 
 void dump_mtk_vs_set_nvram_cnf(struct hpav_mtk_vs_set_nvram_cnf *response) {
@@ -330,38 +322,6 @@ int test_mme_mtk_vs_reset_req(hpav_chan_t *channel, int argc, char *argv[]) {
     hpav_free_mtk_vs_reset_cnf(response);
     return rv;
 }
-int test_mme_mtk_vs_reset_ind(hpav_chan_t *channel, int argc, char *argv[]) {
-
-    struct hpav_error *error_stack = NULL;
-    struct hpav_mtk_vs_reset_ind mme_sent;
-    struct hpav_mtk_vs_reset_rsp *response = NULL;
-    // Broadcast by default
-    unsigned char dest_mac[ETH_MAC_ADDRESS_SIZE] = {
-        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-    int rv = EXIT_SUCCESS;
-
-    if (argc > 0) {
-        if (!hpav_stomac(argv[0], dest_mac)) {
-            printf("An error occurred. Input mac value is in valid format...\n");
-            return EXIT_USAGE;
-        }
-    }
-
-    // Sending MME on the channel
-    printf("Sending Mstar VS_RESET.IND on the channel\n");
-    rv = hpav_mtk_vs_reset_ind_sndrcv(channel, dest_mac,
-                                      &mme_sent, &response,
-                                      1000, 0, &error_stack);
-    if (rv != HPAV_OK) {
-        printf("An error occurred. Dumping error stack...\n");
-        hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
-        rv = EXIT_FAILURE;
-    }
-
-    return rv;
-}
-
 void dump_mtk_vs_get_nvram_cnf(struct hpav_mtk_vs_get_nvram_cnf *response) {
     int sta_num = 1, i, j;
     printf("--- Response from stations ---\n");
@@ -1838,65 +1798,6 @@ int test_mme_mtk_vs_spi_stats_req(hpav_chan_t *channel, int argc,
     }
     // Free response
     hpav_free_mtk_vs_spi_stats_cnf(response);
-    return rv;
-}
-
-void dump_mtk_vs_set_tx_cali_ind(struct hpav_mtk_vs_set_tx_cali_ind *response) {
-    int sta_num = 1;
-    int spectrum_idx = 0;
-    int i;
-    printf("--- Response from stations ---\n");
-    if (response == NULL) {
-        printf("No STA answered\n\n");
-        return;
-    }
-
-    while (response != NULL) {
-        char buffer[64];
-        printf("Station %d :\n", sta_num);
-        printf("MAC address                                           : %s\n",
-               hpav_mactos(response->sta_mac_addr, buffer));
-        printf("spectrum_idx                                          : %d\n",
-               response->spectrum_idx);
-        spectrum_idx = response->spectrum_idx;
-        if (spectrum_idx != 0 && response->result) {
-            printf("Result                                              :\n");
-            for (i = 0; i < spectrum_idx; i++) {
-                if (i % 16 == 0)
-                    printf("\n");
-                printf(" %X ", response->result[i]);
-            }
-            printf("\n");
-        }
-        sta_num++;
-        response = response->next;
-    }
-}
-
-int test_mme_mtk_vs_set_tx_cali_ind(hpav_chan_t *channel, int argc,
-                                    char *argv[]) {
-
-    struct hpav_error *error_stack = NULL;
-    struct hpav_mtk_vs_set_tx_cali_ind *response = NULL;
-    int rv = EXIT_SUCCESS;
-
-    // Sending MME on the channel
-    printf("Recving Mstar VS_SET_TX_CALI.IND on the channel\n");
-    rv = hpav_mtk_vs_set_tx_cali_ind_rcv(channel, &response,
-                                         1000, 0, &error_stack);
-    if (rv != HPAV_OK) {
-        printf("An error occurred. Dumping error stack...\n");
-        hpav_dump_error_stack(error_stack);
-        hpav_free_error_stack(&error_stack);
-        rv = EXIT_FAILURE;
-    } else {
-        // Dump response
-        dump_mtk_vs_set_tx_cali_ind(response);
-        if (response == NULL)
-            rv = EXIT_NO_RESPONSE;
-    }
-    // Free response
-    hpav_free_mtk_vs_set_tx_cali_ind(response);
     return rv;
 }
 

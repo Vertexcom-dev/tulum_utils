@@ -69,9 +69,6 @@ int hpav_add_error(struct hpav_error **error_stack,
                    enum hpav_error_module error_module, int error_code,
                    const char *message, const char *details);
 
-int hpav_append_error_stack(struct hpav_error **error_stack,
-                            struct hpav_error *second_error_stack);
-
 int hpav_free_error_stack(struct hpav_error **error_stack);
 
 int hpav_dump_error_stack(struct hpav_error *error_stack);

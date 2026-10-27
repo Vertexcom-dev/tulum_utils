@@ -30,8 +30,6 @@ int test_mme_mtk_vs_get_version_req(hpav_chan_t *channel, int argc,
                                     char *argv[]);
 int test_mme_mtk_vs_reset_req(hpav_chan_t *channel, int argc,
                               char *argv[]);
-int test_mme_mtk_vs_reset_ind(hpav_chan_t *channel, int argc,
-                              char *argv[]);
 int test_mme_mtk_vs_get_tonemask_req(hpav_chan_t *channel, int argc,
                                      char *argv[]);
 int test_mme_mtk_vs_get_eth_phy_req(hpav_chan_t *channel, int argc,
@@ -75,8 +73,6 @@ int test_mme_mtk_vs_set_pwm_conf_req(hpav_chan_t *channel, int argc,
 #define MTK_VS_SET_PWM_CONF_REQ_PARAMETER_FAIL -1
 #define MTK_VS_SET_PWM_CONF_REQ_FAIL -2
 int test_mme_mtk_vs_set_tx_cali_req(hpav_chan_t *channel, int argc,
-                                    char *argv[]);
-int test_mme_mtk_vs_set_tx_cali_ind(hpav_chan_t *channel, int argc,
                                     char *argv[]);
 int test_mme_vc_vs_set_sniffer_conf_req(hpav_chan_t *channel, int argc,
                                     char* argv[]);

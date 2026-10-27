@@ -61,10 +61,6 @@ extern "C" {
         unsigned int timeout_ms, unsigned int num_fragments,                   \
         struct hpav_error **error_stack);
 
-#define HPAV_SMART_COPY_STRUCT_DECL(MME_NAME)                                  \
-    int hpav_smart_copy_struct_##MME_NAME(struct hpav_##MME_NAME *new_mme,     \
-                                          struct hpav_##MME_NAME *mme);
-
 #define HPAV_SMART_COPY_DECL(MME_NAME)                                         \
     int hpav_smart_copy_##MME_NAME(struct hpav_##MME_NAME *new_mme,            \
                                    struct hpav_##MME_NAME *mme);
@@ -396,24 +392,6 @@ struct __packed hpav_eth_frame {
     // Chain packets for fragmentation/defragmentation when sending/receiving
     struct hpav_eth_frame *next;
 } __packed_end;
-
-// Support function for raw MME
-int hpav_setup_mme_header(unsigned short mme_type, unsigned int num_fragments,
-                          unsigned int fragment_num,
-                          unsigned fragment_sequence_number,
-                          struct hpav_mme_header *header);
-// Send a raw MME on the channel
-int hpav_send_raw_mme(struct hpav_chan *channel,
-                      unsigned char sta_mac_addr[ETH_MAC_ADDRESS_SIZE],
-                      struct hpav_mme_header *header, unsigned char *mme_data,
-                      unsigned int mme_data_size,
-                      struct hpav_error **error_stack);
-
-// Sniffing
-typedef int (*hpav_sniff_callback)(unsigned char *user_data,
-                                   const struct hpav_eth_frame *eth_frame);
-int hpav_sniff(struct hpav_chan *channel, hpav_sniff_callback callback,
-               unsigned char *user_data, struct hpav_error **error_stack);
 
 // Encrypted payload for CM_SET_KEY
 int hpav_cm_set_key_encrypted_sndrcv(

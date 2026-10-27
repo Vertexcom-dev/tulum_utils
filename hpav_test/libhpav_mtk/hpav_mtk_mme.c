@@ -153,7 +153,6 @@
 HPAV_SMART_COPY_IMPL(mtk_vs_set_nvram_cnf);
 HPAV_SMART_COPY_IMPL(mtk_vs_get_version_cnf);
 HPAV_SMART_COPY_IMPL(mtk_vs_reset_cnf);
-HPAV_SMART_COPY_IMPL(mtk_vs_reset_rsp);
 HPAV_SMART_COPY_IMPL(mtk_vs_get_nvram_cnf);
 HPAV_SMART_COPY_IMPL(mtk_vs_get_tonemask_cnf);
 HPAV_SMART_COPY_IMPL(mtk_vs_get_eth_phy_cnf);
@@ -359,19 +358,9 @@ int hpav_smart_copy_mtk_vs_set_tx_cali_cnf(
     return 0;
 }
 
-int hpav_smart_copy_mtk_vs_set_tx_cali_ind(
-    struct hpav_mtk_vs_set_tx_cali_ind *response, unsigned char *mme_data,
-    unsigned int mme_data_size) {
-    response->spectrum_idx = *((unsigned short *)mme_data);
-    mme_data = mme_data + 2;
-    memcpy(response->result, mme_data, SNIF_GP_CAL_NUM_OF_SPECTRUM);
-    return 0;
-}
-
 HPAV_FREE_STRUCT_IMPL(mtk_vs_set_nvram_cnf);
 HPAV_FREE_STRUCT_IMPL(mtk_vs_get_version_cnf);
 HPAV_FREE_STRUCT_IMPL(mtk_vs_reset_cnf);
-HPAV_FREE_STRUCT_IMPL(mtk_vs_reset_rsp);
 HPAV_FREE_STRUCT_IMPL(mtk_vs_get_nvram_cnf);
 HPAV_FREE_STRUCT_IMPL(mtk_vs_get_tonemask_cnf);
 HPAV_FREE_STRUCT_IMPL(mtk_vs_get_eth_phy_cnf);
@@ -386,7 +375,6 @@ HPAV_FREE_STRUCT_IMPL(mtk_vs_file_access_cnf);
 HPAV_FREE_STRUCT_IMPL(mtk_vs_set_capture_state_cnf);
 HPAV_FREE_STRUCT_IMPL(mtk_vs_spi_stats_cnf);
 HPAV_FREE_STRUCT_IMPL(mtk_vs_set_tx_cali_cnf);
-HPAV_FREE_STRUCT_IMPL(mtk_vs_set_tx_cali_ind);
 HPAV_FREE_STRUCT_IMPL(vc_vs_set_sniffer_conf_cnf);
 HPAV_FREE_STRUCT_IMPL(vc_vs_set_remote_access_cnf);
 HPAV_FREE_STRUCT_IMPL(vc_vs_get_remote_access_cnf);
@@ -433,17 +421,10 @@ int hpav_free_mtk_vs_get_nw_info_cnf(
     return 0;
 }
 
-HPAV_SMART_COPY_STRUCT_IMPL(mtk_vs_reset_cnf);
-HPAV_SMART_COPY_STRUCT_IMPL(mtk_vs_get_version_cnf);
-HPAV_SMART_COPY_STRUCT_IMPL(mtk_vs_get_nw_info_entry);
-HPAV_SMART_COPY_STRUCT_IMPL(mtk_vs_get_link_stats_cnf);
-HPAV_SMART_COPY_STRUCT_IMPL(mtk_vs_set_tx_cali_cnf);
-HPAV_SMART_COPY_STRUCT_IMPL(mtk_vs_set_tx_cali_ind);
 
 HPAV_ENCODE_MTK_MME_IMPL(mtk_vs_set_nvram_req, MMTYPE_MTK_VS_SET_NVRAM_REQ);
 HPAV_ENCODE_MTK_MME_IMPL(mtk_vs_get_version_req, MMTYPE_MTK_VS_GET_VERSION_REQ);
 HPAV_ENCODE_MTK_MME_IMPL(mtk_vs_reset_req, MMTYPE_MTK_VS_RESET_REQ);
-HPAV_ENCODE_MTK_MME_IMPL(mtk_vs_reset_ind, MMTYPE_MTK_VS_RESET_IND);
 HPAV_ENCODE_MTK_MME_IMPL(mtk_vs_get_nvram_req, MMTYPE_MTK_VS_GET_NVRAM_REQ);
 HPAV_ENCODE_MTK_MME_IMPL(mtk_vs_get_tonemask_req,
                          MMTYPE_MTK_VS_GET_TONEMASK_REQ);
@@ -480,7 +461,6 @@ HPAV_ENCODE_MTK_MME_IMPL(vc_vs_get_remote_access_req,
 HPAV_DECODE_MTK_MME_IMPL(mtk_vs_set_nvram_cnf);
 HPAV_DECODE_MTK_MME_IMPL(mtk_vs_get_version_cnf);
 HPAV_DECODE_MTK_MME_IMPL(mtk_vs_reset_cnf);
-HPAV_DECODE_MTK_MME_IMPL(mtk_vs_reset_rsp);
 HPAV_DECODE_MTK_MME_IMPL(mtk_vs_get_nvram_cnf);
 HPAV_DECODE_MTK_MME_IMPL(mtk_vs_get_tonemask_cnf);
 HPAV_DECODE_MTK_MME_IMPL(mtk_vs_get_eth_phy_cnf);
@@ -498,7 +478,6 @@ HPAV_DECODE_MTK_MME_IMPL(mtk_vs_spi_stats_cnf);
 HPAV_DECODE_MTK_MME_IMPL(mtk_vs_pwm_generation_cnf);
 HPAV_DECODE_MTK_MME_IMPL(mtk_vs_file_access_cnf);
 HPAV_DECODE_MTK_MME_IMPL(mtk_vs_set_tx_cali_cnf);
-HPAV_DECODE_MTK_MME_IMPL(mtk_vs_set_tx_cali_ind);
 HPAV_DECODE_MTK_MME_IMPL(vc_vs_set_sniffer_conf_cnf);
 HPAV_DECODE_MTK_MME_IMPL(vc_vs_get_remote_access_cnf);
 HPAV_DECODE_MTK_MME_IMPL(vc_vs_set_remote_access_cnf);
@@ -532,146 +511,6 @@ HPAV_MME_SNDRCV_IMPL(vc_vs_set_remote_access, req, cnf,
                      MMTYPE_VC_VS_SET_REMOTE_ACCESS_CNF);
 HPAV_MME_SNDRCV_IMPL(vc_vs_get_remote_access, req, cnf,
                      MMTYPE_VC_VS_GET_REMOTE_ACCESS_CNF);
-
-int hpav_mtk_vs_reset_ind_sndrcv(
-    struct hpav_chan *channel, unsigned char sta_mac_addr[ETH_MAC_ADDRESS_SIZE],
-    struct hpav_mtk_vs_reset_ind *request,
-    struct hpav_mtk_vs_reset_rsp **response, unsigned int timeout_ms,
-    unsigned int num_fragments, struct hpav_error **error_stack) {
-    /* MME packets */
-    struct hpav_mme_packet *tx_mme_packets = NULL;
-    struct hpav_mme_packet *rx_mme_packets = NULL;
-    /* ETH frames */
-    struct hpav_eth_frame *tx_frames = NULL;
-    struct hpav_eth_frame *current_frame = NULL;
-    /* Result */
-    int result = -1;
-    /* User data passed to pcap_dispatch() callback */
-    callback_data_t cb_data;
-    /* Hold compiled program */
-    struct bpf_program fp;
-    /* Timeout management */
-    struct hpav_sys_time start_time, end_time;
-    /* Init callback user data */
-    memset(&cb_data, 0, sizeof(callback_data_t));
-    cb_data.type = MMTYPE_MTK_VS_RESET_RSP;
-    cb_data.num_fragments = num_fragments;
-    /* Source MAC address */
-    memcpy(cb_data.src_mac_addr, channel->mac_addr, ETH_MAC_ADDRESS_SIZE);
-    /* Destination MAC address */
-    memcpy(cb_data.sta_mac_addr, sta_mac_addr, ETH_MAC_ADDRESS_SIZE);
-    /* Init response */
-    *response = NULL;
-
-    /* Encode the mme into a buffer */
-    tx_mme_packets = hpav_encode_mtk_vs_reset_ind(
-        cb_data.sta_mac_addr, cb_data.src_mac_addr, request);
-    /* Build the frames */
-    tx_frames = hpav_build_frames(tx_mme_packets, ETH_FRAME_MIN_SIZE);
-    /* TX packets not needed anymore */
-    hpav_free_mme_packets(tx_mme_packets);
-
-    /* Compile the program with a filter - non-optimized */
-    if (pcap_compile(channel->pcap_chan, &fp, "ether proto 0x88E1", 0, 0) ==
-        -1) {
-        char buffer[PCAP_ERRBUF_SIZE + 128];
-        sprintf(buffer, "PCAP error code : %d, errbuf : %s", result,
-                pcap_geterr(channel->pcap_chan));
-        hpav_add_error(error_stack, hpav_error_category_network,
-                       hpav_error_module_core, HPAV_ERROR_PCAP_ERROR,
-                       "pcap_compile failed", buffer);
-        hpav_free_eth_frames(tx_frames);
-        return HPAV_ERROR_PCAP_ERROR;
-    }
-
-    /* Set the compiled program as the filter */
-    if (pcap_setfilter(channel->pcap_chan, &fp) == -1) {
-        char buffer[PCAP_ERRBUF_SIZE + 128];
-        sprintf(buffer, "PCAP error code : %d, errbuf : %s", result,
-                pcap_geterr(channel->pcap_chan));
-        hpav_add_error(error_stack, hpav_error_category_network,
-                       hpav_error_module_core, HPAV_ERROR_PCAP_ERROR,
-                       "pcap_setfilter failed", buffer);
-        hpav_free_eth_frames(tx_frames);
-        pcap_freecode(&fp);
-        return HPAV_ERROR_PCAP_ERROR;
-    }
-    pcap_freecode(&fp);
-
-    /* Send the frames */
-    current_frame = tx_frames;
-    while (current_frame != NULL) {
-        result =
-            pcap_sendpacket(channel->pcap_chan, (unsigned char *)current_frame,
-                            current_frame->frame_size);
-        if (result != 0) {
-            /* PCAP error */
-            char buffer[PCAP_ERRBUF_SIZE + 128];
-            sprintf(buffer, "PCAP error code : %d, errbuf : %s", result,
-                    pcap_geterr(channel->pcap_chan));
-            hpav_add_error(error_stack, hpav_error_category_network,
-                           hpav_error_module_core, HPAV_ERROR_PCAP_ERROR,
-                           "pcap_sendpacket failed", buffer);
-            hpav_free_eth_frames(tx_frames);
-            return HPAV_ERROR_PCAP_ERROR;
-        }
-        current_frame = current_frame->next;
-    }
-    /* TX frames not needed anymore */
-    hpav_free_eth_frames(tx_frames);
-
-    /* Receive the frames. If timeout is zero, don't attempt reception. */
-    if (timeout_ms > 0) {
-        /* Init start time */
-        hpav_get_sys_time(&start_time);
-
-        /* We loop until we have collected all the packets with the right
-         * Ethertype and MME type */
-        do {
-            result = pcap_dispatch(channel->pcap_chan, -1, rx_callback,
-                                   (u_char *)&cb_data);
-            if (result > 0) {
-                /* PCAP: number of  packets  processed  on  success */
-            } else if (result == 0) {
-                /* PCAP: no packets to read */
-            } else if (result == -1) {
-                /* PCAP: error occured */
-                char buffer[PCAP_ERRBUF_SIZE + 128];
-                sprintf(buffer, "PCAP error code : %d, errbuf : %s", result,
-                        pcap_geterr(channel->pcap_chan));
-                hpav_add_error(error_stack, hpav_error_category_network,
-                               hpav_error_module_core, HPAV_ERROR_PCAP_ERROR,
-                               "pcap_dispatch failed", buffer);
-                hpav_free_eth_frames(cb_data.rx_frames);
-                return HPAV_ERROR_PCAP_ERROR;
-            } else /* (result == -2) */
-            {
-                /* PCAP: the loop terminated due to a call to pcap_breakloop()
-                 * before any packets were  processed */
-            }
-
-            /* Compute elapsed time */
-            hpav_get_sys_time(&end_time);
-
-            /* Exit loop when caller timeout is reached */
-        } while ((hpav_get_elapsed_time_ms(&start_time, &end_time) <=
-                  (int)timeout_ms) &&
-                 !cb_data.stop);
-
-        /* Defragment frames */
-        rx_mme_packets = hpav_defrag_frames(cb_data.rx_frames);
-        /* RX Frames not needed anymore */
-        hpav_free_eth_frames(cb_data.rx_frames);
-
-        /* Build user level MMEs (MME type specific) */
-        *response = hpav_decode_mtk_vs_reset_rsp(rx_mme_packets);
-
-        /* RX MME packets not needed anymore */
-        hpav_free_mme_packets(rx_mme_packets);
-    }
-
-    return HPAV_OK;
-}
 
 int hpav_mtk_vs_get_pwm_stats_sndrcv(
     struct hpav_chan *channel, unsigned char sta_mac_addr[ETH_MAC_ADDRESS_SIZE],
@@ -1240,109 +1079,6 @@ int hpav_mtk_vs_set_tx_cali_sndrcv(
     return HPAV_OK;
 }
 
-int hpav_mtk_vs_set_tx_cali_ind_rcv(
-    struct hpav_chan *channel, struct hpav_mtk_vs_set_tx_cali_ind **response,
-    unsigned int timeout_ms, unsigned int num_fragments,
-    struct hpav_error **error_stack) {
-    /* MME packets */
-    struct hpav_mme_packet *rx_mme_packets = NULL;
-
-    /* Result */
-    int result = -1;
-    /* User data passed to pcap_dispatch() callback */
-    callback_data_t cb_data;
-    /* Hold compiled program */
-    struct bpf_program fp;
-    /* Timeout management */
-    struct hpav_sys_time start_time, end_time;
-    /* Init callback user data */
-    memset(&cb_data, 0, sizeof(callback_data_t));
-    cb_data.type = MMTYPE_MTK_VS_SET_TX_CALI_IND;
-    /* Source MAC address */
-    memcpy(cb_data.src_mac_addr, channel->mac_addr, ETH_MAC_ADDRESS_SIZE);
-    /* Init response */
-    *response = NULL;
-
-    /* Compile the program with a filter - non-optimized */
-    if (pcap_compile(channel->pcap_chan, &fp, "ether proto 0x88E1", 0, 0) ==
-        -1) {
-        char buffer[PCAP_ERRBUF_SIZE + 128];
-        sprintf(buffer, "PCAP error code : %d, errbuf : %s", result,
-                pcap_geterr(channel->pcap_chan));
-        hpav_add_error(error_stack, hpav_error_category_network,
-                       hpav_error_module_core, HPAV_ERROR_PCAP_ERROR,
-                       "pcap_compile failed", buffer);
-        return HPAV_ERROR_PCAP_ERROR;
-    }
-
-    /* Set the compiled program as the filter */
-    if (pcap_setfilter(channel->pcap_chan, &fp) == -1) {
-        char buffer[PCAP_ERRBUF_SIZE + 128];
-        sprintf(buffer, "PCAP error code : %d, errbuf : %s", result,
-                pcap_geterr(channel->pcap_chan));
-        hpav_add_error(error_stack, hpav_error_category_network,
-                       hpav_error_module_core, HPAV_ERROR_PCAP_ERROR,
-                       "pcap_setfilter failed", buffer);
-        pcap_freecode(&fp);
-        return HPAV_ERROR_PCAP_ERROR;
-    }
-    pcap_freecode(&fp);
-
-    /* Receive the frames. If timeout is zero, don't attempt reception. */
-    if (timeout_ms > 0) {
-        /* Init start time */
-        hpav_get_sys_time(&start_time);
-
-        /* We loop until we have collected all the packets with the right
-         * Ethertype and MME type */
-        do {
-            result = pcap_dispatch(channel->pcap_chan, -1, rx_callback,
-                                   (u_char *)&cb_data);
-            if (result > 0) {
-                /* PCAP: number of  packets  processed  on  success */
-                if (cb_data.rx_frames != NULL &&
-                    (cb_data.num_fragments_received - 1) == cb_data.fn)
-                    break;
-            } else if (result == 0) {
-                /* PCAP: no packets to read */
-            } else if (result == -1) {
-                /* PCAP: error occured */
-                char buffer[PCAP_ERRBUF_SIZE + 128];
-                sprintf(buffer, "PCAP error code : %d, errbuf : %s", result,
-                        pcap_geterr(channel->pcap_chan));
-                hpav_add_error(error_stack, hpav_error_category_network,
-                               hpav_error_module_core, HPAV_ERROR_PCAP_ERROR,
-                               "pcap_dispatch failed", buffer);
-                hpav_free_eth_frames(cb_data.rx_frames);
-                return HPAV_ERROR_PCAP_ERROR;
-            } else /* (result == -2) */
-            {
-                /* PCAP: the loop terminated due to a call to pcap_breakloop()
-                 * before any packets were  processed */
-            }
-
-            /* Compute elapsed time */
-            hpav_get_sys_time(&end_time);
-
-            /* Exit loop when caller timeout is reached */
-        } while ((hpav_get_elapsed_time_ms(&start_time, &end_time) <=
-                  (int)timeout_ms) &&
-                 !cb_data.stop);
-
-        /* Defragment frames */
-        rx_mme_packets = hpav_defrag_frames(cb_data.rx_frames);
-        /* RX Frames not needed anymore */
-        hpav_free_eth_frames(cb_data.rx_frames);
-        /* Build user level MMEs (MME type specific) */
-        *response = hpav_decode_mtk_vs_set_tx_cali_ind(rx_mme_packets);
-
-        /* RX MME packets not needed anymore */
-        hpav_free_mme_packets(rx_mme_packets);
-    }
-
-    return HPAV_OK;
-}
-
 int hpav_mtk_vs_file_access_sndrcv(
     struct hpav_chan *channel, unsigned char sta_mac_addr[ETH_MAC_ADDRESS_SIZE],
     struct hpav_mtk_vs_file_access_req *request,
@@ -1485,67 +1221,4 @@ int hpav_mtk_vs_file_access_sndrcv(
     }
 
     return HPAV_OK;
-}
-
-// Prepare a header for a Mstar MME
-int hpav_setup_mtk_mme_header(unsigned short mme_type,
-                              unsigned int num_fragments,
-                              unsigned int fragment_num,
-                              unsigned fragment_sequence_number,
-                              struct hpav_mtk_mme_header *header) {
-    header->mmv = MME_HEADER_MMV_HPAV11;
-    header->mmtype = mme_type;
-    header->fmi_nf_fn = ((num_fragments << MME_HEADER_NUM_FRAGMENTS_SHIFT) &
-                         MME_HEADER_NUM_FRAGMENTS_MASK) |
-                        ((fragment_num << MME_HEADER_FRAGMENT_NUMBER_SHIFT) &
-                         MME_HEADER_FRAGMENT_NUMBER_MASK);
-    header->fmi_fmsn = fragment_sequence_number;
-    header->oui[0] = 0x00;
-    header->oui[1] = 0x13;
-    header->oui[2] = 0xD7;
-    return 0;
-}
-
-// Send a raw Mstar MME on the channel
-// Caller prepares the MME header
-int hpav_send_raw_mtk_mme(struct hpav_chan *channel,
-                          unsigned char sta_mac_addr[ETH_MAC_ADDRESS_SIZE],
-                          struct hpav_mtk_mme_header *header,
-                          unsigned char *mme_data, unsigned int mme_data_size) {
-    unsigned char *new_mme = NULL;
-    unsigned int mme_size = sizeof(struct hpav_mtk_mme_header) + mme_data_size;
-    struct hpav_mme_packet *new_packet =
-        (struct hpav_mme_packet *)malloc(sizeof(struct hpav_mme_packet));
-    struct hpav_mtk_mme_frame *mme_frame = NULL;
-    struct hpav_eth_frame *tx_frames = NULL;
-    struct hpav_eth_frame *current_frame = NULL;
-    int result = -1;
-
-    // First build a MME packet to feed common function calls
-    new_mme = (unsigned char *)malloc(mme_size);
-    mme_frame = (struct hpav_mtk_mme_frame *)new_mme;
-    memcpy(&mme_frame->header, header, sizeof(struct hpav_mtk_mme_header));
-    memcpy(&mme_frame->unknown_mtk_mme, mme_data, mme_data_size);
-    // Byte ordering issues should be resolved by the caller
-    new_packet->data_size = mme_size;
-    new_packet->data = new_mme;
-    memcpy(new_packet->dst_mac_addr, sta_mac_addr, ETH_MAC_ADDRESS_SIZE);
-    memcpy(new_packet->src_mac_addr, channel->mac_addr, ETH_MAC_ADDRESS_SIZE);
-    new_packet->next = NULL;
-
-    // Build ETH frames (eventually this will allow sending fragmented MMEs
-    tx_frames = hpav_build_frames(new_packet, ETH_FRAME_MIN_SIZE);
-
-    current_frame = tx_frames;
-    while (current_frame != NULL) {
-        result =
-            pcap_sendpacket(channel->pcap_chan, (unsigned char *)current_frame,
-                            current_frame->frame_size);
-        if (result != 0) {
-            /* Here add exit if something wrong occured */
-        }
-        current_frame = current_frame->next;
-    }
-    hpav_free_eth_frames(tx_frames);
-    return result;
 }
