@@ -607,7 +607,7 @@ int hpav_file_to_binary_data(const char *filename, unsigned char **result_data,
     // Open file
     fd = fopen(filename, "rb");
     if (fd == NULL) {
-        sprintf(buffer, "Cannot open file <%s>\n", filename);
+        snprintf(buffer, sizeof(buffer), "Cannot open file <%s>\n", filename);
         hpav_add_error(error_stack, hpav_error_category_input,
                        hpav_error_module_core, HPAV_ERROR_CANNOT_OPEN_FILE,
                        "fopen failed in hpav_file_to_binary_data", buffer);
@@ -618,7 +618,7 @@ int hpav_file_to_binary_data(const char *filename, unsigned char **result_data,
     fseek(fd, 0, SEEK_END);
     file_size = ftell(fd);
     if (file_size <= 0) {
-        sprintf(buffer, "Unexpected ftell result for %s\n", filename);
+        snprintf(buffer, sizeof(buffer), "Unexpected ftell result for %s\n", filename);
         hpav_add_error(error_stack, hpav_error_category_input,
                        hpav_error_module_core, HPAV_ERROR_CANNOT_OPEN_FILE,
                        "ftell failed in hpav_file_to_binary_data", buffer);
@@ -629,13 +629,23 @@ int hpav_file_to_binary_data(const char *filename, unsigned char **result_data,
 
     // Allocate buffer
     *result_data = (unsigned char *)malloc(file_size);
+    if (*result_data == NULL) {
+        snprintf(buffer, sizeof(buffer), "Cannot allocate buffer for <%s>\n",
+                 filename);
+        hpav_add_error(error_stack, hpav_error_category_input,
+                       hpav_error_module_core, HPAV_ERROR_CANNOT_OPEN_FILE,
+                       "malloc failed in hpav_file_to_binary_data", buffer);
+        fclose(fd);
+        return HPAV_ERROR_CANNOT_OPEN_FILE;
+    }
     // Read file data
     if (1 != fread(*result_data, file_size, 1, fd)) {
-        sprintf(buffer, "Cannot read file <%s>\n", filename);
+        snprintf(buffer, sizeof(buffer), "Cannot read file <%s>\n", filename);
         hpav_add_error(error_stack, hpav_error_category_input,
                        hpav_error_module_core, HPAV_ERROR_CANNOT_OPEN_FILE,
                        "fread failed in hpav_file_to_binary_data", buffer);
         free(*result_data);
+        *result_data = NULL;
         fclose(fd);
         return HPAV_ERROR_CANNOT_OPEN_FILE;
     }
