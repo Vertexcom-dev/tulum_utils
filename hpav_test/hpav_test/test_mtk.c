@@ -87,7 +87,7 @@ int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
     FILE *nvram = NULL;
     long nvram_size = MTK_NVRAM_BLOCK_SIZE;
     long nvram_read_size = 0;
-    unsigned int nvram_block_size_max = 0;
+    unsigned int last_block_index = 0;
     struct hpav_mtk_vs_set_nvram_req mme_sent;
     struct hpav_mtk_vs_set_nvram_cnf *response = NULL;
     // Broadcast by default
@@ -125,8 +125,8 @@ int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
     rewind(nvram);
 
     // Check if the index of NVRAM block to write larger than NVRAM size
-    nvram_block_size_max = nvram_size / MTK_NVRAM_BLOCK_SIZE;
-    if (block_index > nvram_block_size_max) {
+    last_block_index = (nvram_size - 1) / MTK_NVRAM_BLOCK_SIZE;
+    if (block_index > last_block_index) {
         printf("error: your nvram size is %ld, but the index of NVRAM block you "
                "want to write is %d",
                nvram_size, block_index);
@@ -140,9 +140,9 @@ int test_mme_mtk_vs_set_nvram_req(hpav_chan_t *channel, int argc,
 
     // based on the index of NVRAM block to write, you should check how many
     // size to read
-    if (block_index == nvram_block_size_max) {
+    if (block_index == last_block_index) {
         nvram_read_size =
-            nvram_size - (nvram_block_size_max * MTK_NVRAM_BLOCK_SIZE);
+            nvram_size - (last_block_index * MTK_NVRAM_BLOCK_SIZE);
     } else {
         nvram_read_size = MTK_NVRAM_BLOCK_SIZE;
     }
@@ -2363,7 +2363,7 @@ process_mtk_vs_file_access_cnf(mtk_vs_file_access_command_t *command,
         response = response->next;
     }
 
-    if (command->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_SCAN_STA) {
+    if (fp != NULL && command->op == HPAV_MTK_VS_FILE_ACCESS_REQ_OP_SCAN_STA) {
         fclose(fp);
     }
     return result;
@@ -2504,8 +2504,9 @@ int test_mme_mtk_vs_file_access_req(hpav_chan_t *channel, int argc,
             }
             ++sta_count;
         }
-
-        fclose(fp);
+        if (fp != NULL) {
+            fclose(fp);
+        }
     } else {
         memcpy(mac_list[sta_count], dest_mac, ETH_MAC_ADDRESS_SIZE);
         sta_count = 1;
@@ -2544,6 +2545,12 @@ int test_mme_mtk_vs_file_access_req(hpav_chan_t *channel, int argc,
             rewind(fp);
 
             buf = (char *)malloc(file_size);
+            if (buf == NULL) {
+                test_mtk_printf("Cannot allocate buffer - %s\n",
+                                cmd->file_name);
+                fclose(fp);
+                return MTK_VS_FILE_ACCESS_REQ_FAIL;
+            }
             if (1 != fread(buf, file_size, 1, fp)) {
                 test_mtk_printf("Unexpected fread result - %s\n",
                                 cmd->file_name);
